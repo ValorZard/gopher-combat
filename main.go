@@ -11,13 +11,6 @@ import (
 
 var img *ebiten.Image
 
-var (
-	pos_x = 80.0
-	pos_y = 80.0
-	vec_x = 0.0
-	vec_y = 0.0
-)
-
 func init() {
 	var err error
 	img, _, err = ebitenutil.NewImageFromFile("gopher.png")
@@ -26,17 +19,40 @@ func init() {
 	}
 }
 
+type Player struct{
+	positionX int
+	positionY int
+	speed float64
+}
+
+type InputData struct{
+	vecX int
+	vecY int
+}
+
 // implements ebiten.Game interface
-type Game struct{}
+type Game struct{
+	player Player
+	inputData InputData
+}
+
+func NewGame() ebiten.Game {
+	g := &Game{}
+	g.player = Player{positionX: 80, positionY: 80, speed: 5}
+	g.inputData = InputData{0, 0}
+	return g
+}
 
 func (g *Game) updateInputs() error {
+	var (
+		vec_x = 0.0
+		vec_y = 0.0
+	)
 	// vertical
 	if ebiten.IsKeyPressed(ebiten.KeyUp) {
 		vec_y = -1
 	} else if ebiten.IsKeyPressed(ebiten.KeyDown) {
 		vec_y = 1
-	} else {
-		vec_y = 0
 	}
 
 	// horizontal
@@ -44,8 +60,6 @@ func (g *Game) updateInputs() error {
 		vec_x = -1
 	} else if ebiten.IsKeyPressed(ebiten.KeyRight) {
 		vec_x = 1
-	} else {
-		vec_x = 0
 	}
 
 	// normalize the vector
@@ -53,7 +67,14 @@ func (g *Game) updateInputs() error {
 		var vector_length = math.Sqrt(vec_x * vec_x + vec_y * vec_y)
 		vec_x /= vector_length
 		vec_y /= vector_length
+		// multiply it by player speed
+		vec_x *= g.player.speed
+		vec_y *= g.player.speed
 	}
+	
+	// cast input to int for determinism
+	g.inputData.vecX = int(vec_x)
+	g.inputData.vecY = int(vec_y)
 
 	// if update returns non nil error, game suspends
 	return nil
@@ -64,8 +85,8 @@ func (g *Game) updateInputs() error {
 func (g *Game) Update() error {
 	g.updateInputs()
 
-	pos_x += vec_x
-	pos_y += vec_y
+	g.player.positionX += g.inputData.vecX
+	g.player.positionY += g.inputData.vecY
 
 	// if update returns non nil error, game suspends
 	return nil
@@ -79,7 +100,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	// draw image
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(pos_x, pos_y)
+	op.GeoM.Translate(float64(g.player.positionX), float64(g.player.positionY))
 	screen.DrawImage(img, op)
 }
 
@@ -94,7 +115,7 @@ func main() {
 
 	// triggers the game loop to actually start up
 	// if we run into an error, log what it is
-	if err := ebiten.RunGame(&Game{}); err != nil {
+	if err := ebiten.RunGame(NewGame()); err != nil {
 		log.Fatal(err)
 	}
 }
