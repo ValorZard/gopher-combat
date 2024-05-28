@@ -23,6 +23,7 @@ import (
 
 var(
 	 img *ebiten.Image
+	 // probably move all webrtc networking stuff to a struct i can manage
 	 peerConnection *webrtc.PeerConnection
 )
 
