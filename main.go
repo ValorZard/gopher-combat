@@ -230,10 +230,10 @@ func main() {
 
 	// Set the handler for the Peer connection state
 	// notifying us when the peer has connected/disconnected
-	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
-		fmt.Printf("Peer Connection State has changed: %s\n", s.String())
+	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		fmt.Printf("Peer Connection State has changed: %s\n", state.String())
 
-		if s == webrtc.PeerConnectionStateFailed {
+		if state == webrtc.PeerConnectionStateFailed {
 			// wait until the PeerConnection has had no network activity for 30 seconds or has had another failure
 			// it might have been using an ICE Restart
 			// we can use webrtc.PeerConnectionStateDisconnected if we want to detect a faster tiemoout
@@ -241,9 +241,10 @@ func main() {
 			fmt.Println("Peer Connection has gone to failed, exiting")
 			os.Exit(0)
 		}
-		if s == webrtc.PeerConnectionStateClosed {
+		if state == webrtc.PeerConnectionStateClosed {
 			// PeerConnection was explicitly closed. This usually happens from a DTLS CloseNotify
 			fmt.Println("Peer Connection has gone to closed, exiting")
+			os.Exit(0)
 		}
 	})
 
