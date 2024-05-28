@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	_ "image/png"
 	"log"
 	"math"
+	"os"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -110,6 +114,15 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 
 // entry point of the program
 func main() {
+	reader := bufio.NewReader(os.Stdin)
+  	fmt.Println("Simple Shell")
+  	fmt.Println("---------------------")
+	fmt.Print("-> ")
+	text, _ := reader.ReadString('\n')
+	// convert CRLF to LF
+	text = strings.Replace(text, "\r\n", "", -1)
+	fmt.Print(text)
+
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello, World!")
 
