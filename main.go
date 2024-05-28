@@ -21,7 +21,10 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-var img *ebiten.Image
+var(
+	 img *ebiten.Image
+	 peerConnection *webrtc.PeerConnection
+)
 
 const messageSize = 15
 
@@ -192,9 +195,7 @@ func decode(in string, obj *webrtc.SessionDescription) {
 	}
 }
 
-// entry point of the program
-func main() {
-
+func setupConnection() {
 	// setup webrtc/connection stuff
 
 	// we have to use pion specific stuff to detach the data channels
@@ -217,16 +218,11 @@ func main() {
 	}
 
 	// Create a new RTCPeerConnection
-	peerConnection, err := api.NewPeerConnection(config)
+	var err error
+	peerConnection, err = api.NewPeerConnection(config)
 	if err != nil {
 		panic(err)
 	}
-	// Make sure the PeerConnection can close properly when used
-	defer func() {
-		if cErr := peerConnection.Close(); cErr != nil {
-			fmt.Printf("cannot close peerConnection: %v\n", cErr)
-		}
-	}()
 
 	// Set the handler for the Peer connection state
 	// notifying us when the peer has connected/disconnected
@@ -302,6 +298,18 @@ func main() {
 
 	// output the answer in base64 so we can paste it in browser
 	fmt.Println(encode(peerConnection.LocalDescription()))
+}
+
+func closeConnection() {
+	// Make sure the PeerConnection can close properly when used
+	if cErr := peerConnection.Close(); cErr != nil {
+		fmt.Printf("cannot close peerConnection: %v\n", cErr)
+	}
+}
+
+// entry point of the program
+func main() {
+	setupConnection()
 
 	// --------------------------------------------------------------------
 	ebiten.SetWindowSize(640, 480)
@@ -312,4 +320,6 @@ func main() {
 	if err := ebiten.RunGame(NewGame()); err != nil {
 		log.Fatal(err)
 	}
+
+	closeConnection()
 }
