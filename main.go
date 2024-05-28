@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"math"
+
 	"os"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 )
 
 var img *ebiten.Image
+
 const messageSize = 15
 
 func init() {
@@ -31,20 +33,20 @@ func init() {
 	}
 }
 
-type Player struct{
+type Player struct {
 	positionX int
 	positionY int
-	speed float64
+	speed     float64
 }
 
-type InputData struct{
+type InputData struct {
 	vecX int
 	vecY int
 }
 
 // implements ebiten.Game interface
-type Game struct{
-	player Player
+type Game struct {
+	player    Player
 	inputData InputData
 }
 
@@ -75,15 +77,15 @@ func (g *Game) updateInputs() error {
 	}
 
 	// normalize the vector
-	if (vec_x != 0 || vec_y != 0) {
-		var vector_length = math.Sqrt(vec_x * vec_x + vec_y * vec_y)
+	if vec_x != 0 || vec_y != 0 {
+		var vector_length = math.Sqrt(vec_x*vec_x + vec_y*vec_y)
 		vec_x /= vector_length
 		vec_y /= vector_length
 		// multiply it by player speed
 		vec_x *= g.player.speed
 		vec_y *= g.player.speed
 	}
-	
+
 	// cast input to int for determinism
 	g.inputData.vecX = int(vec_x)
 	g.inputData.vecY = int(vec_y)
@@ -120,11 +122,12 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 	return 640, 480
 }
 
-// ReadLoop shows how to read from the datachannel directly
-func ReadLoop(d io.Reader) {
+// read from the datachannel directly
+func ReadLoop(dataChannel io.Reader) {
 	for {
 		buffer := make([]byte, messageSize)
-		n, err := d.Read(buffer)
+		// n stands for the max bytes remaning
+		n, err := dataChannel.Read(buffer)
 		if err != nil {
 			fmt.Println("Datachannel closed; Exit the readloop:", err)
 			return
@@ -134,22 +137,24 @@ func ReadLoop(d io.Reader) {
 	}
 }
 
-// WriteLoop shows how to write to the datachannel directly
-func WriteLoop(d io.Writer) {
+// write to the datachannel directly
+func WriteLoop(dataChannel io.Writer) {
+	// send a random message every 5 seconds for now
 	for range time.NewTicker(5 * time.Second).C {
+		// generate a random message
 		message, err := randutil.GenerateCryptoRandomString(messageSize, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 		if err != nil {
 			panic(err)
 		}
 
 		fmt.Printf("Sending %s \n", message)
-		if _, err := d.Write([]byte(message)); err != nil {
+		if _, err := dataChannel.Write([]byte(message)); err != nil {
 			panic(err)
 		}
 	}
 }
 
-// Read from stdin until we get a newline
+// read from stdin until we get a newline
 func readUntilNewline() (in string) {
 	var err error
 
@@ -159,23 +164,20 @@ func readUntilNewline() (in string) {
 		if err != nil && !errors.Is(err, io.EOF) {
 			panic(err)
 		}
-
 		if in = strings.TrimSpace(in); len(in) > 0 {
 			break
 		}
 	}
-
 	fmt.Println("")
 	return
 }
 
-// JSON encode + base64 a SessionDescription
+// JSON encode + base64 a SessionDescripton
 func encode(obj *webrtc.SessionDescription) string {
 	b, err := json.Marshal(obj)
 	if err != nil {
 		panic(err)
 	}
-
 	return base64.StdEncoding.EncodeToString(b)
 }
 
@@ -185,7 +187,6 @@ func decode(in string, obj *webrtc.SessionDescription) {
 	if err != nil {
 		panic(err)
 	}
-
 	if err = json.Unmarshal(b, obj); err != nil {
 		panic(err)
 	}
@@ -193,20 +194,20 @@ func decode(in string, obj *webrtc.SessionDescription) {
 
 // entry point of the program
 func main() {
-	// Since this behavior diverges from the WebRTC API it has to be
-	// enabled using a settings engine. Mixing both detached and the
-	// OnMessage DataChannel API is not supported.
+
+	// setup webrtc/connection stuff
+
+	// we have to use pion specific stuff to detach the data channels
+	// if we decide to use the pion specific data channel stuff, we CANNOT use the OnMessage api
 
 	// Create a SettingEngine and enable Detach
-	s := webrtc.SettingEngine{}
-	s.DetachDataChannels()
+	settings := webrtc.SettingEngine{}
+	settings.DetachDataChannels()
 
-	// Create an API object with the engine
-	api := webrtc.NewAPI(webrtc.WithSettingEngine(s))
+	// create api object with the engine
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(settings))
 
-	// Everything below is the Pion WebRTC API! Thanks for using it ❤️.
-
-	// Prepare the configuration
+	// setup the configuration
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -215,60 +216,60 @@ func main() {
 		},
 	}
 
-	// Create a new RTCPeerConnection using the API object
+	// Create a new RTCPeerConnection
 	peerConnection, err := api.NewPeerConnection(config)
 	if err != nil {
 		panic(err)
 	}
+	// Make sure the PeerConnection can close properly when used
 	defer func() {
 		if cErr := peerConnection.Close(); cErr != nil {
 			fmt.Printf("cannot close peerConnection: %v\n", cErr)
 		}
 	}()
 
-	// Set the handler for Peer connection state
-	// This will notify you when the peer has connected/disconnected
+	// Set the handler for the Peer connection state
+	// notifying us when the peer has connected/disconnected
 	peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
 		fmt.Printf("Peer Connection State has changed: %s\n", s.String())
 
 		if s == webrtc.PeerConnectionStateFailed {
-			// Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
-			// Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
-			// Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
-			fmt.Println("Peer Connection has gone to failed exiting")
+			// wait until the PeerConnection has had no network activity for 30 seconds or has had another failure
+			// it might have been using an ICE Restart
+			// we can use webrtc.PeerConnectionStateDisconnected if we want to detect a faster tiemoout
+			// Though PeerConnection may come back from PeerConnectionStateDisconnected
+			fmt.Println("Peer Connection has gone to failed, exiting")
 			os.Exit(0)
 		}
-
 		if s == webrtc.PeerConnectionStateClosed {
 			// PeerConnection was explicitly closed. This usually happens from a DTLS CloseNotify
-			fmt.Println("Peer Connection has gone to closed exiting")
-			os.Exit(0)
+			fmt.Println("Peer Connection has gone to closed, exiting")
 		}
 	})
 
 	// Register data channel creation handling
-	peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
-		fmt.Printf("New DataChannel %s %d\n", d.Label(), d.ID())
+	peerConnection.OnDataChannel(func(dataChannel *webrtc.DataChannel) {
+		fmt.Printf("New DataChannel %s %d\n", dataChannel.Label(), dataChannel.ID())
 
 		// Register channel opening handling
-		d.OnOpen(func() {
-			fmt.Printf("Data channel '%s'-'%d' open.\n", d.Label(), d.ID())
+		dataChannel.OnOpen(func() {
+			fmt.Printf("Data channel '%s' - '%d' open.\n", dataChannel.Label(), *dataChannel.ID())
 
-			// Detach the data channel
-			raw, dErr := d.Detach()
+			// Detach the data channel for easier use
+			rawDataChannel, dErr := dataChannel.Detach()
 			if dErr != nil {
 				panic(dErr)
 			}
 
-			// Handle reading from the data channel
-			go ReadLoop(raw)
+			// handle reading from the data channel
+			go ReadLoop(rawDataChannel)
 
 			// Handle writing to the data channel
-			go WriteLoop(raw)
+			go WriteLoop(rawDataChannel)
 		})
 	})
 
-	// Wait for the offer to be pasted
+	// wait for the offer to be posted
 	offer := webrtc.SessionDescription{}
 	decode(readUntilNewline(), &offer)
 
@@ -284,10 +285,10 @@ func main() {
 		panic(err)
 	}
 
-	// Create channel that is blocked until ICE Gathering is complete
+	// create channel that is blocked until ICE Gathering is complete
 	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
-	// Sets the LocalDescription, and starts our UDP listeners
+	// sets the LocalDescription, and starts our UDP listeners
 	err = peerConnection.SetLocalDescription(answer)
 	if err != nil {
 		panic(err)
@@ -298,9 +299,10 @@ func main() {
 	// in a production application you should exchange ICE Candidates via OnICECandidate
 	<-gatherComplete
 
-	// Output the answer in base64 so we can paste it in browser
+	// output the answer in base64 so we can paste it in browser
 	fmt.Println(encode(peerConnection.LocalDescription()))
 
+	// --------------------------------------------------------------------
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello, World!")
 
