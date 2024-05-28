@@ -311,7 +311,7 @@ func closeConnection() {
 // entry point of the program
 func main() {
 	setupConnection()
-
+	defer closeConnection()
 	// --------------------------------------------------------------------
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello, World!")
@@ -321,6 +321,4 @@ func main() {
 	if err := ebiten.RunGame(NewGame()); err != nil {
 		log.Fatal(err)
 	}
-
-	closeConnection()
 }
