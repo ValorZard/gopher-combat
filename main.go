@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"net/http"
 
 	"os"
 	"strings"
@@ -182,6 +184,7 @@ func encode(obj *webrtc.SessionDescription) string {
 	if err != nil {
 		panic(err)
 	}
+	postSession(b)
 	return base64.StdEncoding.EncodeToString(b)
 }
 
@@ -194,6 +197,27 @@ func decode(in string, obj *webrtc.SessionDescription) {
 	if err = json.Unmarshal(b, obj); err != nil {
 		panic(err)
 	}
+}
+
+func postSession(jsonData []byte){
+	// we will run an HTTP server locally to test the POST request
+	url := "http://localhost:8080/sessions"
+
+	// create post body
+	body := bytes.NewBuffer(jsonData)
+
+	println(body)
+
+	resp, err := http.Post(url, "application/json", body)
+	if err != nil {
+		// we will get an error at this stage if the request fails, such as if the
+		// requested URL is not found, or if the server is not reachable.
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// print the status code
+	fmt.Println("Status:", resp.Status)
 }
 
 func setupConnection() {
