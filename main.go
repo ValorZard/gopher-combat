@@ -23,10 +23,10 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-var(
-	 img *ebiten.Image
-	 // probably move all webrtc networking stuff to a struct i can manage
-	 peerConnection *webrtc.PeerConnection
+var (
+	img *ebiten.Image
+	// probably move all webrtc networking stuff to a struct i can manage
+	peerConnection *webrtc.PeerConnection
 )
 
 const messageSize = 15
@@ -199,7 +199,7 @@ func decode(in string, obj *webrtc.SessionDescription) {
 	}
 }
 
-func postSession(jsonData []byte){
+func postSession(jsonData []byte) {
 	// we will run an HTTP server locally to test the POST request
 	url := "http://localhost:8080/sessions"
 
@@ -220,7 +220,7 @@ func postSession(jsonData []byte){
 	fmt.Println("Status:", resp.Status)
 }
 
-func setupConnection() {
+func setupConnection(isHost bool) {
 	// setup webrtc/connection stuff
 
 	// we have to use pion specific stuff to detach the data channels
@@ -291,38 +291,42 @@ func setupConnection() {
 		})
 	})
 
-	// wait for the offer to be posted
-	offer := webrtc.SessionDescription{}
-	decode(readUntilNewline(), &offer)
+	if isHost {
 
-	// Set the remote SessionDescription
-	err = peerConnection.SetRemoteDescription(offer)
-	if err != nil {
-		panic(err)
+	} else {
+		// wait for the offer to be posted
+		offer := webrtc.SessionDescription{}
+		decode(readUntilNewline(), &offer)
+
+		// Set the remote SessionDescription
+		err = peerConnection.SetRemoteDescription(offer)
+		if err != nil {
+			panic(err)
+		}
+
+		// Create answer
+		answer, err := peerConnection.CreateAnswer(nil)
+		if err != nil {
+			panic(err)
+		}
+
+		// create channel that is blocked until ICE Gathering is complete
+		gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+		// sets the LocalDescription, and starts our UDP listeners
+		err = peerConnection.SetLocalDescription(answer)
+		if err != nil {
+			panic(err)
+		}
+
+		// Block until ICE Gathering is complete, disabling trickle ICE
+		// we do this because we only can exchange one signaling message
+		// in a production application you should exchange ICE Candidates via OnICECandidate
+		<-gatherComplete
+
+		// output the answer in base64 so we can paste it in browser
+		fmt.Println(encode(peerConnection.LocalDescription()))
 	}
-
-	// Create answer
-	answer, err := peerConnection.CreateAnswer(nil)
-	if err != nil {
-		panic(err)
-	}
-
-	// create channel that is blocked until ICE Gathering is complete
-	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-	// sets the LocalDescription, and starts our UDP listeners
-	err = peerConnection.SetLocalDescription(answer)
-	if err != nil {
-		panic(err)
-	}
-
-	// Block until ICE Gathering is complete, disabling trickle ICE
-	// we do this because we only can exchange one signaling message
-	// in a production application you should exchange ICE Candidates via OnICECandidate
-	<-gatherComplete
-
-	// output the answer in base64 so we can paste it in browser
-	fmt.Println(encode(peerConnection.LocalDescription()))
 }
 
 func closeConnection() {
@@ -334,7 +338,7 @@ func closeConnection() {
 
 // entry point of the program
 func main() {
-	setupConnection()
+	setupConnection(false)
 	defer closeConnection()
 	// --------------------------------------------------------------------
 	ebiten.SetWindowSize(640, 480)
