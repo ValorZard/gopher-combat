@@ -184,7 +184,7 @@ func encode(obj *webrtc.SessionDescription) string {
 	if err != nil {
 		panic(err)
 	}
-	postSession(b)
+	//postSession(b)
 	return base64.StdEncoding.EncodeToString(b)
 }
 
@@ -249,6 +249,12 @@ func setupConnection(isHost bool) {
 		panic(err)
 	}
 
+	// Set the handler for ICE connection state
+	// This will notify us when the peer has connected/disconnected
+	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
+	})
+
 	// Set the handler for the Peer connection state
 	// notifying us when the peer has connected/disconnected
 	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
@@ -293,6 +299,20 @@ func setupConnection(isHost bool) {
 
 	if isHost {
 
+		// create an offer to send to the signaling server
+		offer, err := peerConnection.CreateOffer(nil)
+		if err != nil {
+			panic(err)
+		}
+
+		// set the LocalDescription, and starts our UDP listeners
+		err = peerConnection.SetLocalDescription(offer)
+		if err != nil {
+			panic(err)
+		}
+
+
+
 	} else {
 		// wait for the offer to be posted
 		offer := webrtc.SessionDescription{}
@@ -310,23 +330,23 @@ func setupConnection(isHost bool) {
 			panic(err)
 		}
 
-		// create channel that is blocked until ICE Gathering is complete
-		gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
 		// sets the LocalDescription, and starts our UDP listeners
 		err = peerConnection.SetLocalDescription(answer)
 		if err != nil {
 			panic(err)
 		}
-
-		// Block until ICE Gathering is complete, disabling trickle ICE
-		// we do this because we only can exchange one signaling message
-		// in a production application you should exchange ICE Candidates via OnICECandidate
-		<-gatherComplete
-
-		// output the answer in base64 so we can paste it in browser
-		fmt.Println(encode(peerConnection.LocalDescription()))
 	}
+
+	// Block until ICE Gathering is complete, disabling trickle ICE
+	// we do this because we only can exchange one signaling message
+	// in a production application you should exchange ICE Candidates via OnICECandidate
+	peerConnection.OnICECandidate(func(canidate *webrtc.ICECandidate){
+		if canidate != nil {
+			// output the answer in base64 so we can paste it in browser
+			fmt.Println(encode(peerConnection.LocalDescription()))
+		}
+	})
 }
 
 func closeConnection() {
