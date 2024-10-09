@@ -181,10 +181,6 @@ func main() {
 			panic(err)
 		}
 
-		// Add handlers for setting up the connection.
-		peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-			fmt.Printf(state.String())
-		})
 		peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 			if candidate != nil {
 				encodedDescr := encode(peerConnection.LocalDescription())
