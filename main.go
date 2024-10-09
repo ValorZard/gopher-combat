@@ -22,11 +22,7 @@ var (
 
 const messageSize = 15
 
-// entry point of the program
-func main() {
-	argsWithProg := os.Args
-	isHost := len(argsWithProg) > 1 && argsWithProg[1] == "host"
-
+func startConnection(isHost bool) {
 	// Since this behavior diverges from the WebRTC API it has to be
 	// enabled using a settings engine. Mixing both detached and the
 	// OnMessage DataChannel API is not supported.
@@ -54,11 +50,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		if cErr := peerConnection.Close(); cErr != nil {
-			fmt.Printf("cannot close peerConnection: %v\n", cErr)
-		}
-	}()
 
 	// Set the handler for Peer connection state
 	// This will notify you when the peer has connected/disconnected
@@ -199,6 +190,20 @@ func main() {
 		// Block forever
 		select {}
 	}
+}
+
+func closeConnection() {
+	if cErr := peerConnection.Close(); cErr != nil {
+		fmt.Printf("cannot close peerConnection: %v\n", cErr)
+	}
+}
+
+// entry point of the program
+func main() {
+	argsWithProg := os.Args
+	isHost := len(argsWithProg) > 1 && argsWithProg[1] == "host"
+	startConnection(isHost)
+	defer closeConnection()
 }
 
 // ReadLoop shows how to read from the datachannel directly
