@@ -49,20 +49,19 @@ func main() {
 		},
 	}
 
+	// Create a new RTCPeerConnection using the API object
+	peerConnection, err := api.NewPeerConnection(config)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if cErr := peerConnection.Close(); cErr != nil {
+			fmt.Printf("cannot close peerConnection: %v\n", cErr)
+		}
+	}()
+
 	// the one that gives the answer is the host
 	if isHost {
-
-		// Create a new RTCPeerConnection using the API object
-		peerConnection, err := api.NewPeerConnection(config)
-		if err != nil {
-			panic(err)
-		}
-		defer func() {
-			if cErr := peerConnection.Close(); cErr != nil {
-				fmt.Printf("cannot close peerConnection: %v\n", cErr)
-			}
-		}()
-
 		// Set the handler for Peer connection state
 		// This will notify you when the peer has connected/disconnected
 		peerConnection.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
@@ -141,12 +140,6 @@ func main() {
 		// Block forever
 		select {}
 	} else {
-		// Create a new RTCPeerConnection using the API object
-		peerConnection, err := api.NewPeerConnection(config)
-		if err != nil {
-			panic(err)
-		}
-
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
 		if err != nil {
@@ -200,6 +193,7 @@ func main() {
 		})
 
 		descr := webrtc.SessionDescription{}
+		// read answer from other peer
 		decode(readUntilNewline(), &descr)
 		if err := peerConnection.SetRemoteDescription(descr); err != nil {
 			panic(err)
