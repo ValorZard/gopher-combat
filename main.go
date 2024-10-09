@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/pion/randutil"
+	//"github.com/pion/randutil"
 	"github.com/pion/webrtc/v4"
 	_ "image/png"
 	"io"
@@ -18,6 +18,9 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"bytes"
+	"encoding/binary"
+	"math"
 )
 
 var img *ebiten.Image
@@ -83,7 +86,7 @@ var (
 	peerConnection *webrtc.PeerConnection
 )
 
-const messageSize = 15
+const messageSize = 8
 
 func startConnection(isHost bool) {
 	// Since this behavior diverges from the WebRTC API it has to be
@@ -275,6 +278,21 @@ func main() {
 	}
 }
 
+func Float32ToByte(f float32) []byte {
+    var buf bytes.Buffer
+    err := binary.Write(&buf, binary.LittleEndian, f)
+    if err != nil {
+        fmt.Println("binary.Write failed:", err)
+    }
+    return buf.Bytes()
+}
+
+func Float32frombytes(bytes []byte) float32 {
+    bits := binary.LittleEndian.Uint32(bytes)
+    float := math.Float32frombits(bits)
+    return float
+}
+
 // ReadLoop shows how to read from the datachannel directly
 func ReadLoop(d io.Reader) {
 	for {
@@ -285,22 +303,34 @@ func ReadLoop(d io.Reader) {
 			return
 		}
 
-		fmt.Printf("Message from DataChannel: %s\n", string(buffer[:n]))
+		remote_pos_x := Float32frombytes(buffer[:8])
+		fmt.Printf("Remote Position X: %f\n", remote_pos_x)
+
+		if n >= 16 {
+			remote_pos_y := Float32frombytes(buffer[8:16])
+
+			fmt.Printf("Message from DataChannel: %f %f\n", remote_pos_x, remote_pos_y)
+		} else {
+			fmt.Println("Message from DataChannel is too small")
+		}
 	}
 }
 
 // WriteLoop shows how to write to the datachannel directly
 func WriteLoop(d io.Writer) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		message, err := randutil.GenerateCryptoRandomString(messageSize, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-		if err != nil {
-			panic(err)
-		}
 
-		fmt.Printf("Sending %s \n", message)
-		if _, err := d.Write([]byte(message)); err != nil {
+		fmt.Printf("Sending x:%f y:%f\n", pos_x, pos_y)
+		posXToBytes := Float32ToByte(float32(pos_x))
+		posYToBytes := Float32ToByte(float32(pos_y))
+		posToBytes := append(posXToBytes[:], posYToBytes[:]...)
+		remote_pos_x := Float32frombytes(posToBytes[:8])
+		remote_pos_y := Float32frombytes(posToBytes[8:16])
+
+		fmt.Printf("check if works: %f %f\n", remote_pos_x, remote_pos_y)
+		if _, err := d.Write(posToBytes); err != nil {
 			panic(err)
 		}
 	}
