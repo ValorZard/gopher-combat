@@ -284,8 +284,8 @@ func main() {
 }
 
 type Packet struct{
-	pos_x float32
-	pos_y float32
+	pos_x float64
+	pos_y float64
 }
 
 // ReadLoop shows how to read from the datachannel directly
@@ -313,12 +313,19 @@ func WriteLoop(d io.Writer) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		packet := &Packet{pos_x: float32(pos_x), pos_y: float32(pos_y)}
+		packet := &Packet{pos_x, pos_y}
 		fmt.Printf("Sending x:%f y:%f\n", packet.pos_x, packet.pos_y)
 		encoded, err := binary.Marshal(packet)
 		if err != nil {
 			panic(err)
 		}
+
+		var packet2 Packet
+		err = binary.Unmarshal(encoded, &packet2)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Decoded: %f %f\n", packet2.pos_x, packet2.pos_y)
 
 		if _, err := d.Write(encoded); err != nil {
 			panic(err)
