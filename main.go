@@ -91,7 +91,7 @@ var (
 	peerConnection *webrtc.PeerConnection
 )
 
-const messageSize = 8
+const messageSize = 32
 
 func startConnection(isHost bool) {
 	// Since this behavior diverges from the WebRTC API it has to be
@@ -284,15 +284,15 @@ func main() {
 }
 
 type Packet struct{
-	pos_x float64
-	pos_y float64
+	Pos_x float64
+	Pos_y float64
 }
 
 // ReadLoop shows how to read from the datachannel directly
 func ReadLoop(d io.Reader) {
 	for {
 		buffer := make([]byte, messageSize)
-		_, err := d.Read(buffer)
+		_, err := io.ReadFull(d, buffer)
 		if err != nil {
 			fmt.Println("Datachannel closed; Exit the readloop:", err)
 			return
@@ -304,7 +304,7 @@ func ReadLoop(d io.Reader) {
 			panic(err)
 		}
 
-		fmt.Printf("Message from DataChannel: %f %f\n", packet.pos_x, packet.pos_y)
+		fmt.Printf("Message from DataChannel: %f %f\n", packet.Pos_x, packet.Pos_y)
 	}
 }
 
@@ -314,7 +314,7 @@ func WriteLoop(d io.Writer) {
 	defer ticker.Stop()
 	for range ticker.C {
 		packet := &Packet{pos_x, pos_y}
-		fmt.Printf("Sending x:%f y:%f\n", packet.pos_x, packet.pos_y)
+		fmt.Printf("Sending x:%f y:%f\n", packet.Pos_x, packet.Pos_y)
 		encoded, err := binary.Marshal(packet)
 		if err != nil {
 			panic(err)
@@ -325,7 +325,8 @@ func WriteLoop(d io.Writer) {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("Decoded: %f %f\n", packet2.pos_x, packet2.pos_y)
+		fmt.Println(encoded)
+		fmt.Printf("Decoded: %f %f\n", packet2.Pos_x, packet2.Pos_y)
 
 		if _, err := d.Write(encoded); err != nil {
 			panic(err)
