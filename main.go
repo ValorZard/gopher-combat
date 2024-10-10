@@ -270,6 +270,7 @@ func closeConnection() {
 
 // entry point of the program
 func main() {
+	
 	isHost := false
 	if runtime.GOOS != "js" {
 		argsWithProg := os.Args
