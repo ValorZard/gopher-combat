@@ -28,6 +28,8 @@ var img *ebiten.Image
 var (
 	pos_x = 80.0
 	pos_y = 80.0
+	remote_pos_x = 80.0
+	remote_pos_y = 80.0
 )
 
 func init() {
@@ -75,6 +77,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(pos_x, pos_y)
 	screen.DrawImage(img, op)
+	
+	// draw remote
+	op2 := &ebiten.DrawImageOptions{}
+	op2.GeoM.Translate(remote_pos_x, remote_pos_y)
+	screen.DrawImage(img, op2)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -303,7 +310,7 @@ func ReadLoop(d io.Reader) {
 			return
 		}
 
-		remote_pos_x := Float32frombytes(buffer[:8])
+		remote_pos_x = float64(Float32frombytes(buffer[:8]))
 		fmt.Printf("Remote Position X: %f\n", remote_pos_x)
 
 		if n >= 16 {
@@ -326,10 +333,6 @@ func WriteLoop(d io.Writer) {
 		posXToBytes := Float32ToByte(float32(pos_x))
 		posYToBytes := Float32ToByte(float32(pos_y))
 		posToBytes := append(posXToBytes[:], posYToBytes[:]...)
-		remote_pos_x := Float32frombytes(posToBytes[:8])
-		remote_pos_y := Float32frombytes(posToBytes[8:16])
-
-		fmt.Printf("check if works: %f %f\n", remote_pos_x, remote_pos_y)
 		if _, err := d.Write(posToBytes); err != nil {
 			panic(err)
 		}
