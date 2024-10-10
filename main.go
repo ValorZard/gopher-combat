@@ -6,15 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
+
 	//"github.com/pion/randutil"
-	"github.com/pion/webrtc/v4"
 	_ "image/png"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"time"
-	_ "image/png"
-	"log"
+
+	"github.com/pion/webrtc/v4"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -268,8 +270,11 @@ func closeConnection() {
 
 // entry point of the program
 func main() {
-	argsWithProg := os.Args
-	isHost := len(argsWithProg) > 1 && argsWithProg[1] == "host"
+	isHost := false
+	if runtime.GOOS != "js" {
+		argsWithProg := os.Args
+		isHost = len(argsWithProg) > 1 && argsWithProg[1] == "host"
+	}
 	startConnection(isHost)
 	defer closeConnection()
 
