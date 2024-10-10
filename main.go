@@ -304,6 +304,9 @@ func ReadLoop(d io.Reader) {
 			panic(err)
 		}
 
+		remote_pos_x = packet.Pos_x
+		remote_pos_y = packet.Pos_y
+
 		fmt.Printf("Message from DataChannel: %f %f\n", packet.Pos_x, packet.Pos_y)
 	}
 }
@@ -319,14 +322,6 @@ func WriteLoop(d io.Writer) {
 		if err != nil {
 			panic(err)
 		}
-
-		var packet2 Packet
-		err = binary.Unmarshal(encoded, &packet2)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(encoded)
-		fmt.Printf("Decoded: %f %f\n", packet2.Pos_x, packet2.Pos_y)
 
 		if _, err := d.Write(encoded); err != nil {
 			panic(err)
