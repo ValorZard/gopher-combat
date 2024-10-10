@@ -18,9 +18,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"bytes"
-	"encoding/binary"
-	"math"
+	"github.com/kelindar/binary"
 )
 
 var img *ebiten.Image
@@ -285,41 +283,28 @@ func main() {
 	}
 }
 
-func Float32ToByte(f float32) []byte {
-    var buf bytes.Buffer
-    err := binary.Write(&buf, binary.LittleEndian, f)
-    if err != nil {
-        fmt.Println("binary.Write failed:", err)
-    }
-    return buf.Bytes()
-}
-
-func Float32frombytes(bytes []byte) float32 {
-    bits := binary.LittleEndian.Uint32(bytes)
-    float := math.Float32frombits(bits)
-    return float
+type Packet struct{
+	pos_x float32
+	pos_y float32
 }
 
 // ReadLoop shows how to read from the datachannel directly
 func ReadLoop(d io.Reader) {
 	for {
 		buffer := make([]byte, messageSize)
-		n, err := d.Read(buffer)
+		_, err := d.Read(buffer)
 		if err != nil {
 			fmt.Println("Datachannel closed; Exit the readloop:", err)
 			return
 		}
 
-		remote_pos_x = float64(Float32frombytes(buffer[:8]))
-		fmt.Printf("Remote Position X: %f\n", remote_pos_x)
-
-		if n >= 16 {
-			remote_pos_y := Float32frombytes(buffer[8:16])
-
-			fmt.Printf("Message from DataChannel: %f %f\n", remote_pos_x, remote_pos_y)
-		} else {
-			fmt.Println("Message from DataChannel is too small")
+		var packet Packet
+		err = binary.Unmarshal(buffer, &packet)
+		if err != nil {
+			panic(err)
 		}
+
+		fmt.Printf("Message from DataChannel: %f %f\n", packet.pos_x, packet.pos_y)
 	}
 }
 
@@ -328,12 +313,14 @@ func WriteLoop(d io.Writer) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
+		packet := &Packet{pos_x: float32(pos_x), pos_y: float32(pos_y)}
+		fmt.Printf("Sending x:%f y:%f\n", packet.pos_x, packet.pos_y)
+		encoded, err := binary.Marshal(packet)
+		if err != nil {
+			panic(err)
+		}
 
-		fmt.Printf("Sending x:%f y:%f\n", pos_x, pos_y)
-		posXToBytes := Float32ToByte(float32(pos_x))
-		posYToBytes := Float32ToByte(float32(pos_y))
-		posToBytes := append(posXToBytes[:], posYToBytes[:]...)
-		if _, err := d.Write(posToBytes); err != nil {
+		if _, err := d.Write(encoded); err != nil {
 			panic(err)
 		}
 	}
