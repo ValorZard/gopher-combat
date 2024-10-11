@@ -8,4 +8,4 @@ $goroot = go env GOROOT
 cp $goroot\misc\wasm\wasm_exec.js .
 
 # serve the files
-python3 .\run_wasm.py
+python3 -m http.server
