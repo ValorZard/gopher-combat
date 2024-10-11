@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# got this script from here: https://stackoverflow.com/questions/21956683/enable-access-control-on-simple-http-server
+
 from http.server import HTTPServer, SimpleHTTPRequestHandler, test
 import sys
 
