@@ -6,3 +6,6 @@ Remove-Item Env:GOARCH
 
 $goroot = go env GOROOT
 cp $goroot\misc\wasm\wasm_exec.js .
+
+# serve the files
+python3 .\run_wasm.py
