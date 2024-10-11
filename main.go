@@ -28,8 +28,8 @@ import (
 var img *ebiten.Image
 
 var (
-	pos_x = 80.0
-	pos_y = 80.0
+	pos_x        = 80.0
+	pos_y        = 80.0
 	remote_pos_x = 80.0
 	remote_pos_y = 80.0
 )
@@ -79,7 +79,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(pos_x, pos_y)
 	screen.DrawImage(img, op)
-	
+
 	// draw remote
 	op2 := &ebiten.DrawImageOptions{}
 	op2.GeoM.Translate(remote_pos_x, remote_pos_y)
@@ -186,7 +186,14 @@ func startConnection(isHost bool) {
 
 		// Wait for the offer to be pasted
 		offer := webrtc.SessionDescription{}
-		decode(readUntilNewline(), &offer)
+		offer_resp, err := client.Get("http://localhost:8080/offer/get")
+		if err != nil {
+			panic(err)
+		}
+		err = json.NewDecoder(offer_resp.Body).Decode(&offer)
+		if err != nil {
+			panic(err)
+		}
 
 		// Set the remote SessionDescription
 		err = peerConnection.SetRemoteDescription(offer)
@@ -214,8 +221,12 @@ func startConnection(isHost bool) {
 		// in a production application you should exchange ICE Candidates via OnICECandidate
 		<-gatherComplete
 
-		// Output the answer in base64 so we can paste it in browser
-		fmt.Println(encode(peerConnection.LocalDescription()))
+		// send answer we generated to the signaling server
+		answerJson, err := json.Marshal(peerConnection.LocalDescription())
+		if err != nil {
+			panic(err)
+		}
+		client.Post("http://localhost:8080/answer/post", "application/json", bytes.NewBuffer(answerJson))
 	} else {
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
@@ -260,16 +271,32 @@ func startConnection(isHost bool) {
 					panic(err)
 				}
 				client.Post("http://localhost:8080/offer/post", "application/json", bytes.NewBuffer(offerJson))
-				encodedDescr := encode(peerConnection.LocalDescription())
-				fmt.Printf("value: %s\n", encodedDescr)
 			}
 		})
 
-		descr := webrtc.SessionDescription{}
-		// read answer from other peer
-		decode(readUntilNewline(), &descr)
-		if err := peerConnection.SetRemoteDescription(descr); err != nil {
-			panic(err)
+		answer := webrtc.SessionDescription{}
+		// read answer from other peer (wait till we actually get something)
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			answer_resp, err := client.Get("http://localhost:8080/answer/get")
+			if err != nil {
+				panic(err)
+			}
+			if answer_resp.StatusCode != http.StatusOK {
+				continue
+			}
+			err = json.NewDecoder(answer_resp.Body).Decode(&answer)
+			if err != nil {
+				panic(err)
+			}
+
+			if err := peerConnection.SetRemoteDescription(answer); err != nil {
+				panic(err)
+			}
+
+			// if we have successfully set the remote description, we can break out of the loop
+			break
 		}
 	}
 }
@@ -282,7 +309,7 @@ func closeConnection() {
 
 // entry point of the program
 func main() {
-	
+
 	isHost := false
 	if runtime.GOOS != "js" {
 		argsWithProg := os.Args
@@ -301,7 +328,7 @@ func main() {
 	}
 }
 
-type Packet struct{
+type Packet struct {
 	Pos_x float64
 	Pos_y float64
 }
