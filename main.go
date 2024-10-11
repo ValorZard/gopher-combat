@@ -186,19 +186,27 @@ func startConnection(isHost bool) {
 
 		// Wait for the offer to be pasted
 		offer := webrtc.SessionDescription{}
-		offer_resp, err := client.Get("http://localhost:8080/offer/get")
-		if err != nil {
-			panic(err)
-		}
-		err = json.NewDecoder(offer_resp.Body).Decode(&offer)
-		if err != nil {
-			panic(err)
-		}
-
-		// Set the remote SessionDescription
-		err = peerConnection.SetRemoteDescription(offer)
-		if err != nil {
-			panic(err)
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			offer_resp, err := client.Get("http://localhost:8080/offer/get")
+			if err != nil {
+				panic(err)
+			}
+			if offer_resp.StatusCode != http.StatusOK {
+				continue
+			}
+			err = json.NewDecoder(offer_resp.Body).Decode(&offer)
+			if err != nil {
+				panic(err)
+			}
+			// Set the remote SessionDescription
+			err = peerConnection.SetRemoteDescription(offer)
+			if err != nil {
+				panic(err)
+			}
+			// if we have successfully set the remote description, we can break out of the loop
+			break
 		}
 
 		// Create answer
