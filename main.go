@@ -189,7 +189,7 @@ func startConnection(isHost bool) {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			offer_resp, err := client.Get("http://localhost:8080/offer/get")
+			offer_resp, err := client.Get("http://localhost:3000/offer/get")
 			if err != nil {
 				panic(err)
 			}
@@ -234,7 +234,7 @@ func startConnection(isHost bool) {
 		if err != nil {
 			panic(err)
 		}
-		client.Post("http://localhost:8080/answer/post", "application/json", bytes.NewBuffer(answerJson))
+		client.Post("http://localhost:3000/answer/post", "application/json", bytes.NewBuffer(answerJson))
 	} else {
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
@@ -278,7 +278,7 @@ func startConnection(isHost bool) {
 				if err != nil {
 					panic(err)
 				}
-				client.Post("http://localhost:8080/offer/post", "application/json", bytes.NewBuffer(offerJson))
+				client.Post("http://localhost:3000/offer/post", "application/json", bytes.NewBuffer(offerJson))
 			}
 		})
 
@@ -287,7 +287,7 @@ func startConnection(isHost bool) {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			answer_resp, err := client.Get("http://localhost:8080/answer/get")
+			answer_resp, err := client.Get("http://localhost:3000/answer/get")
 			if err != nil {
 				panic(err)
 			}
