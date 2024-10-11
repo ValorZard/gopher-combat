@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"runtime"
 
 	//"github.com/pion/randutil"
@@ -153,6 +155,11 @@ func startConnection(isHost bool) {
 		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
 	})
 
+	// client to the HTTP signaling server
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
 	// the one that gives the answer is the host
 	if isHost {
 		// Register data channel creation handling
@@ -248,6 +255,11 @@ func startConnection(isHost bool) {
 		// print out possible offers from different ICE Candidates
 		peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 			if candidate != nil {
+				offerJson, err := json.Marshal(peerConnection.LocalDescription())
+				if err != nil {
+					panic(err)
+				}
+				client.Post("http://localhost:8080/offer/post", "application/json", bytes.NewBuffer(offerJson))
 				encodedDescr := encode(peerConnection.LocalDescription())
 				fmt.Printf("value: %s\n", encodedDescr)
 			}
