@@ -162,6 +162,7 @@ func startConnection(isHost bool) {
 
 	// the one that gives the answer is the host
 	if isHost {
+		/*
 		// Host creates lobby
 		lobby_resp, err := client.Get("http://localhost:3000/hostLobby")
 		if err != nil {
@@ -173,6 +174,7 @@ func startConnection(isHost bool) {
 		}
 		lobby_id := string(bodyBytes)
 		fmt.Printf("Lobby ID: %s\n", lobby_id)
+		*/
 
 		// Register data channel creation handling
 		peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
