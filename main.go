@@ -53,6 +53,7 @@ func init() {
 type Game struct{
 	ui  *ebitenui.UI
 	hostButton *widget.Button
+	joinButton *widget.Button
 	//This parameter is so you can keep track of the textInput widget to update and retrieve
 	//its values in other parts of your game
 	standardTextInput *widget.TextInput
@@ -400,7 +401,7 @@ func main() {
 
 		// specify the button's text, the font face, and the color
 		//widget.ButtonOpts.Text("Hello, World!", face, &widget.ButtonTextColor{
-		widget.ButtonOpts.Text("Hello, [color=FF00FF]World![/color]", face, &widget.ButtonTextColor{
+		widget.ButtonOpts.Text("Host Game", face, &widget.ButtonTextColor{
 			Idle:    color.NRGBA{0xdf, 0xf4, 0xff, 0xff},
 			Hover:   color.NRGBA{0, 255, 128, 255},
 			Pressed: color.NRGBA{255, 0, 0, 255},
@@ -425,6 +426,47 @@ func main() {
 
 	// add the button as a child of the container
 	rootContainer.AddChild(game.hostButton)
+
+	// Creating button variable first so that it is usable in callbacks
+	game.joinButton = widget.NewButton(
+		// set general widget options
+		widget.ButtonOpts.WidgetOpts(
+			// instruct the container's anchor layout to center the button both horizontally and vertically
+			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
+				HorizontalPosition: widget.AnchorLayoutPositionCenter,
+				VerticalPosition:   widget.AnchorLayoutPositionCenter + 10,
+			}),
+		),
+		// specify the images to use
+		widget.ButtonOpts.Image(buttonImage),
+
+		// specify the button's text, the font face, and the color
+		//widget.ButtonOpts.Text("Hello, World!", face, &widget.ButtonTextColor{
+		widget.ButtonOpts.Text("Join Lobby", face, &widget.ButtonTextColor{
+			Idle:    color.NRGBA{0xdf, 0xf4, 0xff, 0xff},
+			Hover:   color.NRGBA{0, 255, 128, 255},
+			Pressed: color.NRGBA{255, 0, 0, 255},
+		}),
+		widget.ButtonOpts.TextProcessBBCode(true),
+		// specify that the button's text needs some padding for correct display
+		widget.ButtonOpts.TextPadding(widget.Insets{
+			Left:   30,
+			Right:  30,
+			Top:    5,
+			Bottom: 5,
+		}),
+
+		// add a handler that reacts to clicking the button
+		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
+			fmt.Println(game.standardTextInput.GetText())
+		}),
+
+		// Indicate that this button should not be submitted when enter or space are pressed
+		widget.ButtonOpts.DisableDefaultKeys(),
+	)
+
+	// add the button as a child of the container
+	rootContainer.AddChild(game.joinButton)
 
 	// construct a standard textinput widget
 	game.standardTextInput = widget.NewTextInput(
