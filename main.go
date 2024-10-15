@@ -27,7 +27,7 @@ import (
 	"github.com/ebitenui/ebitenui"
 	"github.com/ebitenui/ebitenui/image"
 	"github.com/ebitenui/ebitenui/widget"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	//"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"golang.org/x/image/font/gofont/goregular"
 )
@@ -52,7 +52,7 @@ func init() {
 // implements ebiten.Game interface
 type Game struct{
 	ui  *ebitenui.UI
-	btn *widget.Button
+	hostButton *widget.Button
 	//This parameter is so you can keep track of the textInput widget to update and retrieve
 	//its values in other parts of your game
 	standardTextInput *widget.TextInput
@@ -87,17 +87,6 @@ func (g *Game) Update() error {
 
 	// update the UI
 	g.ui.Update()
-	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
-		g.btn.Click()
-	}
-
-	//Test that you can call Click on the focused widget.
-	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
-		if btn, ok := g.ui.GetFocusedWidget().(*widget.Button); ok {
-			btn.Click()
-		}
-	}
-
 
 	// if update returns non nil error, game suspends
 	return nil
@@ -390,11 +379,14 @@ func main() {
 		// the container will use an anchor layout to layout its single child widget
 		widget.ContainerOpts.Layout(widget.NewAnchorLayout()),
 	)
+	game := Game{}
+	// construct the UI
+	game.ui = &ebitenui.UI{
+		Container: rootContainer,
+	}
 
 	// Creating button variable first so that it is usable in callbacks
-	var button *widget.Button
-	// construct a button
-	button = widget.NewButton(
+	game.hostButton = widget.NewButton(
 		// set general widget options
 		widget.ButtonOpts.WidgetOpts(
 			// instruct the container's anchor layout to center the button both horizontally and vertically
@@ -421,56 +413,21 @@ func main() {
 			Top:    5,
 			Bottom: 5,
 		}),
-		//Move the text down and right on press
-		widget.ButtonOpts.PressedHandler(func(args *widget.ButtonPressedEventArgs) {
-			button.Text().Inset.Top = 4
-			button.Text().Inset.Left = 4
-			button.GetWidget().CustomData = true
-		}),
-		//Move the text back to start on press released
-		widget.ButtonOpts.ReleasedHandler(func(args *widget.ButtonReleasedEventArgs) {
-			button.Text().Inset.Top = 0
-			button.Text().Inset.Left = 0
-			button.GetWidget().CustomData = false
-		}),
 
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
-			println("button clicked")
-		}),
-
-		// add a handler that reacts to entering the button with the cursor
-		widget.ButtonOpts.CursorEnteredHandler(func(args *widget.ButtonHoverEventArgs) {
-			println("cursor entered button: entered =", args.Entered, "offsetX =", args.OffsetX, "offsetY =", args.OffsetY)
-			//If we moved the Text because we clicked on this button previously, move the text down and right
-			if button.GetWidget().CustomData == true {
-				button.Text().Inset.Top = 4
-				button.Text().Inset.Left = 4
-			}
-		}),
-
-		// add a handler that reacts to moving the cursor on the button
-		widget.ButtonOpts.CursorMovedHandler(func(args *widget.ButtonHoverEventArgs) {
-			println("cursor moved on button: entered =", args.Entered, "offsetX =", args.OffsetX, "offsetY =", args.OffsetY, "diffX =", args.DiffX, "diffY =", args.DiffY)
-		}),
-
-		// add a handler that reacts to exiting the button with the cursor
-		widget.ButtonOpts.CursorExitedHandler(func(args *widget.ButtonHoverEventArgs) {
-			println("cursor exited button: entered =", args.Entered, "offsetX =", args.OffsetX, "offsetY =", args.OffsetY)
-			//Reset the Text inset if the cursor is no longer over the button
-			button.Text().Inset.Top = 0
-			button.Text().Inset.Left = 0
+			fmt.Println(game.standardTextInput.GetText())
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
-		// widget.ButtonOpts.DisableDefaultKeys(),
+		widget.ButtonOpts.DisableDefaultKeys(),
 	)
 
 	// add the button as a child of the container
-	rootContainer.AddChild(button)
+	rootContainer.AddChild(game.hostButton)
 
 	// construct a standard textinput widget
-	standardTextInput := widget.NewTextInput(
+	game.standardTextInput = widget.NewTextInput(
 		widget.TextInputOpts.WidgetOpts(
 			//Set the layout information to center the textbox in the parent
 			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
@@ -515,24 +472,13 @@ func main() {
 			fmt.Println("Text Submitted: ", args.InputText)
 		}),
 
-		//This is called whenver there is a change to the text
+		//This is called whenever there is a change to the text
 		widget.TextInputOpts.ChangedHandler(func(args *widget.TextInputChangedEventArgs) {
 			fmt.Println("Text Changed: ", args.InputText)
 		}),
 	)
 
-	rootContainer.AddChild(standardTextInput)
-
-	// construct the UI
-	ui := ebitenui.UI{
-		Container: rootContainer,
-	}
-
-	game := Game{
-		ui:  &ui,
-		btn: button,
-		standardTextInput: standardTextInput,
-	}
+	rootContainer.AddChild(game.standardTextInput)
 
 	// triggers the game loop to actually start up
 	// if we run into an error, log what it is
