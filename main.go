@@ -393,7 +393,7 @@ func main() {
 			// instruct the container's anchor layout to center the button both horizontally and vertically
 			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
 				HorizontalPosition: widget.AnchorLayoutPositionCenter,
-				VerticalPosition:   widget.AnchorLayoutPositionCenter + 20,
+				VerticalPosition:   widget.AnchorLayoutPositionStart,
 			}),
 		),
 		// specify the images to use
@@ -434,7 +434,7 @@ func main() {
 			// instruct the container's anchor layout to center the button both horizontally and vertically
 			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
 				HorizontalPosition: widget.AnchorLayoutPositionCenter,
-				VerticalPosition:   widget.AnchorLayoutPositionCenter + 10,
+				VerticalPosition:   widget.AnchorLayoutPositionEnd,
 			}),
 		),
 		// specify the images to use
