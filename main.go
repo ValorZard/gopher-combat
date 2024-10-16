@@ -476,6 +476,7 @@ func main() {
 				HorizontalPosition: widget.AnchorLayoutPositionCenter,
 				VerticalPosition:   widget.AnchorLayoutPositionCenter,
 			}),
+			widget.WidgetOpts.MinSize(150, 30),
 		),
 
 		//Set the Idle and Disabled background image for the text input
@@ -506,7 +507,7 @@ func main() {
 		),
 
 		//This text is displayed if the input is empty
-		widget.TextInputOpts.Placeholder("Standard Textbox"),
+		widget.TextInputOpts.Placeholder("Lobby ID"),
 
 		//This is called when the user hits the "Enter" key.
 		//There are other options that can configure this behavior
