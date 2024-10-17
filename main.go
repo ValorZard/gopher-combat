@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"runtime"
+	//"runtime"
 
 	//"github.com/pion/randutil"
 	"image/color"
@@ -354,15 +354,6 @@ func closeConnection() {
 
 // entry point of the program
 func main() {
-
-	isHost := false
-	if runtime.GOOS != "js" {
-		argsWithProg := os.Args
-		isHost = len(argsWithProg) > 1 && argsWithProg[1] == "host"
-	}
-	startConnection(isHost)
-	defer closeConnection()
-
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello, World!")
 
@@ -418,6 +409,7 @@ func main() {
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
 			fmt.Println(game.standardTextInput.GetText())
+			startConnection(true)
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
@@ -459,6 +451,7 @@ func main() {
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
 			fmt.Println(game.standardTextInput.GetText())
+			startConnection(false)
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
@@ -528,6 +521,9 @@ func main() {
 	if err := ebiten.RunGame(&game); err != nil {
 		log.Fatal(err)
 	}
+
+	// close the connection when the game ends
+	closeConnection()
 }
 
 type Packet struct {
