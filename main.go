@@ -31,10 +31,10 @@ import (
 var img *ebiten.Image
 
 var (
-	pos_x        = 80.0
-	pos_y        = 80.0
-	remote_pos_x = 80.0
-	remote_pos_y = 80.0
+	pos_x        = 40.0
+	pos_y        = 40.0
+	remote_pos_x = 40.0
+	remote_pos_y = 40.0
 )
 
 func init() {
@@ -275,6 +275,7 @@ func startConnection(isHost bool, game *Game) {
 			}
 		}()
 	} else {
+		client.Get("http://localhost:3000/lobby/join?id=" + game.standardTextInput.GetText())
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
 		if err != nil {
