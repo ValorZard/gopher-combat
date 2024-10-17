@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	//"runtime"
@@ -16,17 +13,16 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pion/webrtc/v4"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/kelindar/binary"
 	"github.com/ebitenui/ebitenui"
 	"github.com/ebitenui/ebitenui/image"
 	"github.com/ebitenui/ebitenui/widget"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/kelindar/binary"
 	//"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"golang.org/x/image/font/gofont/goregular"
@@ -50,8 +46,8 @@ func init() {
 }
 
 // implements ebiten.Game interface
-type Game struct{
-	ui  *ebitenui.UI
+type Game struct {
+	ui         *ebitenui.UI
 	hostButton *widget.Button
 	joinButton *widget.Button
 	//This parameter is so you can keep track of the textInput widget to update and retrieve
@@ -63,7 +59,6 @@ type Game struct{
 func (g *Game) Layout(outsideWidth int, outsideHeight int) (int, int) {
 	return outsideWidth, outsideHeight
 }
-
 
 // called every tick (default 60 times a second)
 // updates game logical state
@@ -85,7 +80,6 @@ func (g *Game) Update() error {
 		pos_x += 1
 	}
 
-
 	// update the UI
 	g.ui.Update()
 
@@ -98,7 +92,7 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	// draw the UI onto the screen
 	g.ui.Draw(screen)
-	
+
 	// prints something on the screen
 	ebitenutil.DebugPrint(screen, "Hello, World!")
 
@@ -120,7 +114,7 @@ var (
 
 const messageSize = 32
 
-func startConnection(isHost bool) {
+func startConnection(isHost bool, game *Game) {
 	// Since this behavior diverges from the WebRTC API it has to be
 	// enabled using a settings engine. Mixing both detached and the
 	// OnMessage DataChannel API is not supported.
@@ -185,7 +179,7 @@ func startConnection(isHost bool) {
 
 	// the one that gives the answer is the host
 	if isHost {
-		
+
 		// Host creates lobby
 		lobby_resp, err := client.Get("http://localhost:3000/lobby/host")
 		if err != nil {
@@ -197,7 +191,7 @@ func startConnection(isHost bool) {
 		}
 		lobby_id := string(bodyBytes)
 		fmt.Printf("Lobby ID: %s\n", lobby_id)
-		
+		game.standardTextInput.SetText(lobby_id)
 
 		// Register data channel creation handling
 		peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
@@ -224,54 +218,62 @@ func startConnection(isHost bool) {
 		// Wait for the offer to be pasted
 		offer := webrtc.SessionDescription{}
 		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			offer_resp, err := client.Get("http://localhost:3000/offer/get")
-			if err != nil {
-				panic(err)
+
+		// poll for offer from signaling server
+		go func() {
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
+					fmt.Println("Polling for offer")
+					offer_resp, err := client.Get("http://localhost:3000/offer/get")
+					if err != nil {
+						panic(err)
+					}
+					if offer_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					err = json.NewDecoder(offer_resp.Body).Decode(&offer)
+					if err != nil {
+						panic(err)
+					}
+					// Set the remote SessionDescription
+					err = peerConnection.SetRemoteDescription(offer)
+					if err != nil {
+						panic(err)
+					}
+					// Create answer
+					answer, err := peerConnection.CreateAnswer(nil)
+					if err != nil {
+						panic(err)
+					}
+
+					// Create channel that is blocked until ICE Gathering is complete
+					gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+					// Sets the LocalDescription, and starts our UDP listeners
+					err = peerConnection.SetLocalDescription(answer)
+					if err != nil {
+						panic(err)
+					}
+
+					// Block until ICE Gathering is complete, disabling trickle ICE
+					// we do this because we only can exchange one signaling message
+					// in a production application you should exchange ICE Candidates via OnICECandidate
+					<-gatherComplete
+
+					// send answer we generated to the signaling server
+					answerJson, err := json.Marshal(peerConnection.LocalDescription())
+					if err != nil {
+						panic(err)
+					}
+					client.Post("http://localhost:3000/answer/post", "application/json", bytes.NewBuffer(answerJson))
+					// if we have successfully set the remote description, we can break out of the loop
+					ticker.Stop()
+					return
+				}
 			}
-			if offer_resp.StatusCode != http.StatusOK {
-				continue
-			}
-			err = json.NewDecoder(offer_resp.Body).Decode(&offer)
-			if err != nil {
-				panic(err)
-			}
-			// Set the remote SessionDescription
-			err = peerConnection.SetRemoteDescription(offer)
-			if err != nil {
-				panic(err)
-			}
-			// if we have successfully set the remote description, we can break out of the loop
-			break
-		}
-
-		// Create answer
-		answer, err := peerConnection.CreateAnswer(nil)
-		if err != nil {
-			panic(err)
-		}
-
-		// Create channel that is blocked until ICE Gathering is complete
-		gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-		// Sets the LocalDescription, and starts our UDP listeners
-		err = peerConnection.SetLocalDescription(answer)
-		if err != nil {
-			panic(err)
-		}
-
-		// Block until ICE Gathering is complete, disabling trickle ICE
-		// we do this because we only can exchange one signaling message
-		// in a production application you should exchange ICE Candidates via OnICECandidate
-		<-gatherComplete
-
-		// send answer we generated to the signaling server
-		answerJson, err := json.Marshal(peerConnection.LocalDescription())
-		if err != nil {
-			panic(err)
-		}
-		client.Post("http://localhost:3000/answer/post", "application/json", bytes.NewBuffer(answerJson))
+		}()
 	} else {
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
@@ -322,27 +324,34 @@ func startConnection(isHost bool) {
 		answer := webrtc.SessionDescription{}
 		// read answer from other peer (wait till we actually get something)
 		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			answer_resp, err := client.Get("http://localhost:3000/answer/get")
-			if err != nil {
-				panic(err)
-			}
-			if answer_resp.StatusCode != http.StatusOK {
-				continue
-			}
-			err = json.NewDecoder(answer_resp.Body).Decode(&answer)
-			if err != nil {
-				panic(err)
-			}
+		go func() {
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
+					fmt.Println("Polling for answer")
+					answer_resp, err := client.Get("http://localhost:3000/answer/get")
+					if err != nil {
+						panic(err)
+					}
+					if answer_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					err = json.NewDecoder(answer_resp.Body).Decode(&answer)
+					if err != nil {
+						panic(err)
+					}
 
-			if err := peerConnection.SetRemoteDescription(answer); err != nil {
-				panic(err)
-			}
+					if err := peerConnection.SetRemoteDescription(answer); err != nil {
+						panic(err)
+					}
 
-			// if we have successfully set the remote description, we can break out of the loop
-			break
-		}
+					// if we have successfully set the remote description, we can break out of the loop
+					ticker.Stop()
+					return
+				}
+			}
+		}()
 	}
 }
 
@@ -409,7 +418,7 @@ func main() {
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
 			fmt.Println(game.standardTextInput.GetText())
-			startConnection(true)
+			startConnection(true, &game)
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
@@ -451,7 +460,7 @@ func main() {
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
 			fmt.Println(game.standardTextInput.GetText())
-			startConnection(false)
+			startConnection(false, &game)
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
@@ -569,48 +578,6 @@ func WriteLoop(d io.Writer) {
 		if _, err := d.Write(encoded); err != nil {
 			panic(err)
 		}
-	}
-}
-
-// Read from stdin until we get a newline
-func readUntilNewline() (in string) {
-	var err error
-
-	r := bufio.NewReader(os.Stdin)
-	for {
-		in, err = r.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			panic(err)
-		}
-
-		if in = strings.TrimSpace(in); len(in) > 0 {
-			break
-		}
-	}
-
-	fmt.Println("")
-	return
-}
-
-// JSON encode + base64 a SessionDescription
-func encode(obj *webrtc.SessionDescription) string {
-	b, err := json.Marshal(obj)
-	if err != nil {
-		panic(err)
-	}
-
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-// Decode a base64 and unmarshal JSON into a SessionDescription
-func decode(in string, obj *webrtc.SessionDescription) {
-	b, err := base64.StdEncoding.DecodeString(in)
-	if err != nil {
-		panic(err)
-	}
-
-	if err = json.Unmarshal(b, obj); err != nil {
-		panic(err)
 	}
 }
 
