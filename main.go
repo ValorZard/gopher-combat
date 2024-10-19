@@ -114,6 +114,10 @@ var (
 
 const messageSize = 32
 
+type PlayerData struct {
+	Id int
+}
+
 func startConnection(isHost bool, game *Game) {
 	// Since this behavior diverges from the WebRTC API it has to be
 	// enabled using a settings engine. Mixing both detached and the
@@ -275,7 +279,16 @@ func startConnection(isHost bool, game *Game) {
 			}
 		}()
 	} else {
-		client.Get("http://localhost:3000/lobby/join?id=" + game.standardTextInput.GetText())
+		response, err := client.Get("http://localhost:3000/lobby/join?id=" + game.standardTextInput.GetText())
+		if err != nil {
+			panic(err)
+		}
+		var player_data PlayerData
+		err = json.NewDecoder(response.Body).Decode(&player_data)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Player ID: %v\n", player_data)
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
 		if err != nil {
