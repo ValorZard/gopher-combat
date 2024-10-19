@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+
 	//"runtime"
 
 	//"github.com/pion/randutil"
@@ -23,6 +25,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/kelindar/binary"
+
 	//"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"golang.org/x/image/font/gofont/goregular"
@@ -332,7 +335,9 @@ func startConnection(isHost bool, game *Game) {
 				if err != nil {
 					panic(err)
 				}
-				client.Post("http://localhost:3000/offer/post?lobby_id=" + lobby_id, "application/json", bytes.NewBuffer(offerJson))
+				postUrl := "http://localhost:3000/offer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
+				fmt.Println(postUrl)
+				client.Post(postUrl, "application/json", bytes.NewBuffer(offerJson))
 			}
 		})
 
