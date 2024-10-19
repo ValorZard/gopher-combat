@@ -279,7 +279,8 @@ func startConnection(isHost bool, game *Game) {
 			}
 		}()
 	} else {
-		response, err := client.Get("http://localhost:3000/lobby/join?id=" + game.standardTextInput.GetText())
+		lobby_id := game.standardTextInput.GetText()
+		response, err := client.Get("http://localhost:3000/lobby/join?id=" + lobby_id)
 		if err != nil {
 			panic(err)
 		}
@@ -331,7 +332,7 @@ func startConnection(isHost bool, game *Game) {
 				if err != nil {
 					panic(err)
 				}
-				client.Post("http://localhost:3000/offer/post", "application/json", bytes.NewBuffer(offerJson))
+				client.Post("http://localhost:3000/offer/post?lobby_id=" + lobby_id, "application/json", bytes.NewBuffer(offerJson))
 			}
 		})
 
