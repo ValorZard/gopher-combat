@@ -233,7 +233,10 @@ func startConnection(isHost bool, game *Game) {
 				case t := <-ticker.C:
 					fmt.Println("Tick at", t)
 					fmt.Println("Polling for offer")
-					offer_resp, err := client.Get("http://localhost:3000/offer/get")
+					// hardcode that there is only one other player and they have player_id 1
+					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=1"
+					fmt.Println(getUrl)
+					offer_resp, err := client.Get(getUrl)
 					if err != nil {
 						panic(err)
 					}
@@ -274,7 +277,9 @@ func startConnection(isHost bool, game *Game) {
 					if err != nil {
 						panic(err)
 					}
-					client.Post("http://localhost:3000/answer/post", "application/json", bytes.NewBuffer(answerJson))
+					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=1"
+					fmt.Println(postUrl)
+					client.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
 					// if we have successfully set the remote description, we can break out of the loop
 					ticker.Stop()
 					return
@@ -350,7 +355,9 @@ func startConnection(isHost bool, game *Game) {
 				case t := <-ticker.C:
 					fmt.Println("Tick at", t)
 					fmt.Println("Polling for answer")
-					answer_resp, err := client.Get("http://localhost:3000/answer/get")
+					url := "http://localhost:3000/answer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
+					fmt.Println(url)
+					answer_resp, err := client.Get(url)
 					if err != nil {
 						panic(err)
 					}
