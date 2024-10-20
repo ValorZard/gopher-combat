@@ -243,7 +243,10 @@ func startConnection(isHost bool, game *Game) {
 					if offer_resp.StatusCode != http.StatusOK {
 						continue
 					}
-					err = json.NewDecoder(offer_resp.Body).Decode(&offer)
+					body := new(bytes.Buffer)
+					body.ReadFrom(offer_resp.Body)
+					fmt.Printf("Got offer %v\n", body.String())
+					err = json.NewDecoder(body).Decode(&offer)
 					if err != nil {
 						panic(err)
 					}
@@ -364,7 +367,10 @@ func startConnection(isHost bool, game *Game) {
 					if answer_resp.StatusCode != http.StatusOK {
 						continue
 					}
-					err = json.NewDecoder(answer_resp.Body).Decode(&answer)
+					body := new(bytes.Buffer)
+					body.ReadFrom(answer_resp.Body)
+					fmt.Printf("Got answer %v\n", body.String())
+					err = json.NewDecoder(body).Decode(&answer)
 					if err != nil {
 						panic(err)
 					}
