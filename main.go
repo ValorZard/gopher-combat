@@ -1,37 +1,43 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"runtime"
+	"strconv"
+
+	//"runtime"
 
 	//"github.com/pion/randutil"
+	"image/color"
 	_ "image/png"
 	"io"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/pion/webrtc/v4"
 
+	"github.com/ebitenui/ebitenui"
+	"github.com/ebitenui/ebitenui/image"
+	"github.com/ebitenui/ebitenui/widget"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/kelindar/binary"
+
+	//"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 var img *ebiten.Image
 
 var (
-	pos_x        = 80.0
-	pos_y        = 80.0
-	remote_pos_x = 80.0
-	remote_pos_y = 80.0
+	pos_x        = 40.0
+	pos_y        = 40.0
+	remote_pos_x = 40.0
+	remote_pos_y = 40.0
 )
 
 func init() {
@@ -43,7 +49,19 @@ func init() {
 }
 
 // implements ebiten.Game interface
-type Game struct{}
+type Game struct {
+	ui         *ebitenui.UI
+	hostButton *widget.Button
+	joinButton *widget.Button
+	//This parameter is so you can keep track of the textInput widget to update and retrieve
+	//its values in other parts of your game
+	standardTextInput *widget.TextInput
+}
+
+// Layout implements Game.
+func (g *Game) Layout(outsideWidth int, outsideHeight int) (int, int) {
+	return outsideWidth, outsideHeight
+}
 
 // called every tick (default 60 times a second)
 // updates game logical state
@@ -65,6 +83,9 @@ func (g *Game) Update() error {
 		pos_x += 1
 	}
 
+	// update the UI
+	g.ui.Update()
+
 	// if update returns non nil error, game suspends
 	return nil
 }
@@ -72,6 +93,9 @@ func (g *Game) Update() error {
 // called every frame, depends on the monitor refresh rate
 // which will probably be at least 60 times per second
 func (g *Game) Draw(screen *ebiten.Image) {
+	// draw the UI onto the screen
+	g.ui.Draw(screen)
+
 	// prints something on the screen
 	ebitenutil.DebugPrint(screen, "Hello, World!")
 
@@ -86,10 +110,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	screen.DrawImage(img, op2)
 }
 
-func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return 640, 480
-}
-
 var (
 	// probably move all webrtc networking stuff to a struct i can manage
 	peerConnection *webrtc.PeerConnection
@@ -97,7 +117,11 @@ var (
 
 const messageSize = 32
 
-func startConnection(isHost bool) {
+type PlayerData struct {
+	Id int
+}
+
+func startConnection(isHost bool, game *Game) {
 	// Since this behavior diverges from the WebRTC API it has to be
 	// enabled using a settings engine. Mixing both detached and the
 	// OnMessage DataChannel API is not supported.
@@ -162,7 +186,7 @@ func startConnection(isHost bool) {
 
 	// the one that gives the answer is the host
 	if isHost {
-		
+
 		// Host creates lobby
 		lobby_resp, err := client.Get("http://localhost:3000/lobby/host")
 		if err != nil {
@@ -174,7 +198,7 @@ func startConnection(isHost bool) {
 		}
 		lobby_id := string(bodyBytes)
 		fmt.Printf("Lobby ID: %s\n", lobby_id)
-		
+		game.standardTextInput.SetText(lobby_id)
 
 		// Register data channel creation handling
 		peerConnection.OnDataChannel(func(d *webrtc.DataChannel) {
@@ -201,55 +225,82 @@ func startConnection(isHost bool) {
 		// Wait for the offer to be pasted
 		offer := webrtc.SessionDescription{}
 		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			offer_resp, err := client.Get("http://localhost:3000/offer/get")
-			if err != nil {
-				panic(err)
+
+		// poll for offer from signaling server
+		go func() {
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
+					fmt.Println("Polling for offer")
+					// hardcode that there is only one other player and they have player_id 1
+					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=1"
+					fmt.Println(getUrl)
+					offer_resp, err := client.Get(getUrl)
+					if err != nil {
+						panic(err)
+					}
+					if offer_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					body := new(bytes.Buffer)
+					body.ReadFrom(offer_resp.Body)
+					fmt.Printf("Got offer %v\n", body.String())
+					err = json.NewDecoder(body).Decode(&offer)
+					if err != nil {
+						panic(err)
+					}
+					// Set the remote SessionDescription
+					err = peerConnection.SetRemoteDescription(offer)
+					if err != nil {
+						panic(err)
+					}
+					// Create answer
+					answer, err := peerConnection.CreateAnswer(nil)
+					if err != nil {
+						panic(err)
+					}
+
+					// Create channel that is blocked until ICE Gathering is complete
+					gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
+					// Sets the LocalDescription, and starts our UDP listeners
+					err = peerConnection.SetLocalDescription(answer)
+					if err != nil {
+						panic(err)
+					}
+
+					// Block until ICE Gathering is complete, disabling trickle ICE
+					// we do this because we only can exchange one signaling message
+					// in a production application you should exchange ICE Candidates via OnICECandidate
+					<-gatherComplete
+
+					// send answer we generated to the signaling server
+					answerJson, err := json.Marshal(peerConnection.LocalDescription())
+					if err != nil {
+						panic(err)
+					}
+					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=1"
+					fmt.Println(postUrl)
+					client.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
+					// if we have successfully set the remote description, we can break out of the loop
+					ticker.Stop()
+					return
+				}
 			}
-			if offer_resp.StatusCode != http.StatusOK {
-				continue
-			}
-			err = json.NewDecoder(offer_resp.Body).Decode(&offer)
-			if err != nil {
-				panic(err)
-			}
-			// Set the remote SessionDescription
-			err = peerConnection.SetRemoteDescription(offer)
-			if err != nil {
-				panic(err)
-			}
-			// if we have successfully set the remote description, we can break out of the loop
-			break
-		}
-
-		// Create answer
-		answer, err := peerConnection.CreateAnswer(nil)
-		if err != nil {
-			panic(err)
-		}
-
-		// Create channel that is blocked until ICE Gathering is complete
-		gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-		// Sets the LocalDescription, and starts our UDP listeners
-		err = peerConnection.SetLocalDescription(answer)
-		if err != nil {
-			panic(err)
-		}
-
-		// Block until ICE Gathering is complete, disabling trickle ICE
-		// we do this because we only can exchange one signaling message
-		// in a production application you should exchange ICE Candidates via OnICECandidate
-		<-gatherComplete
-
-		// send answer we generated to the signaling server
-		answerJson, err := json.Marshal(peerConnection.LocalDescription())
-		if err != nil {
-			panic(err)
-		}
-		client.Post("http://localhost:3000/answer/post", "application/json", bytes.NewBuffer(answerJson))
+		}()
 	} else {
+		lobby_id := game.standardTextInput.GetText()
+		response, err := client.Get("http://localhost:3000/lobby/join?id=" + lobby_id)
+		if err != nil {
+			panic(err)
+		}
+		var player_data PlayerData
+		err = json.NewDecoder(response.Body).Decode(&player_data)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Player ID: %v\n", player_data)
 		// Create a datachannel with label 'data'
 		dataChannel, err := peerConnection.CreateDataChannel("data", nil)
 		if err != nil {
@@ -292,34 +343,48 @@ func startConnection(isHost bool) {
 				if err != nil {
 					panic(err)
 				}
-				client.Post("http://localhost:3000/offer/post", "application/json", bytes.NewBuffer(offerJson))
+				postUrl := "http://localhost:3000/offer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
+				fmt.Println(postUrl)
+				client.Post(postUrl, "application/json", bytes.NewBuffer(offerJson))
 			}
 		})
 
 		answer := webrtc.SessionDescription{}
 		// read answer from other peer (wait till we actually get something)
 		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			answer_resp, err := client.Get("http://localhost:3000/answer/get")
-			if err != nil {
-				panic(err)
-			}
-			if answer_resp.StatusCode != http.StatusOK {
-				continue
-			}
-			err = json.NewDecoder(answer_resp.Body).Decode(&answer)
-			if err != nil {
-				panic(err)
-			}
+		go func() {
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
+					fmt.Println("Polling for answer")
+					url := "http://localhost:3000/answer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
+					fmt.Println(url)
+					answer_resp, err := client.Get(url)
+					if err != nil {
+						panic(err)
+					}
+					if answer_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					body := new(bytes.Buffer)
+					body.ReadFrom(answer_resp.Body)
+					fmt.Printf("Got answer %v\n", body.String())
+					err = json.NewDecoder(body).Decode(&answer)
+					if err != nil {
+						panic(err)
+					}
 
-			if err := peerConnection.SetRemoteDescription(answer); err != nil {
-				panic(err)
-			}
+					if err := peerConnection.SetRemoteDescription(answer); err != nil {
+						panic(err)
+					}
 
-			// if we have successfully set the remote description, we can break out of the loop
-			break
-		}
+					// if we have successfully set the remote description, we can break out of the loop
+					ticker.Stop()
+					return
+				}
+			}
+		}()
 	}
 }
 
@@ -331,23 +396,176 @@ func closeConnection() {
 
 // entry point of the program
 func main() {
-
-	isHost := false
-	if runtime.GOOS != "js" {
-		argsWithProg := os.Args
-		isHost = len(argsWithProg) > 1 && argsWithProg[1] == "host"
-	}
-	startConnection(isHost)
-	defer closeConnection()
-
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello, World!")
 
+	// load images for button states: idle, hover, and pressed
+	buttonImage, _ := loadButtonImage()
+
+	// load button text font
+	face, _ := loadFont(20)
+
+	// construct a new container that serves as the root of the UI hierarchy
+	rootContainer := widget.NewContainer(
+		// the container will use a plain color as its background
+		widget.ContainerOpts.BackgroundImage(image.NewNineSliceColor(color.NRGBA{0x13, 0x1a, 0x22, 0xff})),
+
+		// the container will use an anchor layout to layout its single child widget
+		widget.ContainerOpts.Layout(widget.NewAnchorLayout()),
+	)
+	game := Game{}
+	// construct the UI
+	game.ui = &ebitenui.UI{
+		Container: rootContainer,
+	}
+
+	// Creating button variable first so that it is usable in callbacks
+	game.hostButton = widget.NewButton(
+		// set general widget options
+		widget.ButtonOpts.WidgetOpts(
+			// instruct the container's anchor layout to center the button both horizontally and vertically
+			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
+				HorizontalPosition: widget.AnchorLayoutPositionCenter,
+				VerticalPosition:   widget.AnchorLayoutPositionStart,
+			}),
+		),
+		// specify the images to use
+		widget.ButtonOpts.Image(buttonImage),
+
+		// specify the button's text, the font face, and the color
+		//widget.ButtonOpts.Text("Hello, World!", face, &widget.ButtonTextColor{
+		widget.ButtonOpts.Text("Host Game", face, &widget.ButtonTextColor{
+			Idle:    color.NRGBA{0xdf, 0xf4, 0xff, 0xff},
+			Hover:   color.NRGBA{0, 255, 128, 255},
+			Pressed: color.NRGBA{255, 0, 0, 255},
+		}),
+		widget.ButtonOpts.TextProcessBBCode(true),
+		// specify that the button's text needs some padding for correct display
+		widget.ButtonOpts.TextPadding(widget.Insets{
+			Left:   30,
+			Right:  30,
+			Top:    5,
+			Bottom: 5,
+		}),
+
+		// add a handler that reacts to clicking the button
+		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
+			fmt.Println(game.standardTextInput.GetText())
+			startConnection(true, &game)
+		}),
+
+		// Indicate that this button should not be submitted when enter or space are pressed
+		widget.ButtonOpts.DisableDefaultKeys(),
+	)
+
+	// add the button as a child of the container
+	rootContainer.AddChild(game.hostButton)
+
+	// Creating button variable first so that it is usable in callbacks
+	game.joinButton = widget.NewButton(
+		// set general widget options
+		widget.ButtonOpts.WidgetOpts(
+			// instruct the container's anchor layout to center the button both horizontally and vertically
+			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
+				HorizontalPosition: widget.AnchorLayoutPositionCenter,
+				VerticalPosition:   widget.AnchorLayoutPositionEnd,
+			}),
+		),
+		// specify the images to use
+		widget.ButtonOpts.Image(buttonImage),
+
+		// specify the button's text, the font face, and the color
+		//widget.ButtonOpts.Text("Hello, World!", face, &widget.ButtonTextColor{
+		widget.ButtonOpts.Text("Join Lobby", face, &widget.ButtonTextColor{
+			Idle:    color.NRGBA{0xdf, 0xf4, 0xff, 0xff},
+			Hover:   color.NRGBA{0, 255, 128, 255},
+			Pressed: color.NRGBA{255, 0, 0, 255},
+		}),
+		widget.ButtonOpts.TextProcessBBCode(true),
+		// specify that the button's text needs some padding for correct display
+		widget.ButtonOpts.TextPadding(widget.Insets{
+			Left:   30,
+			Right:  30,
+			Top:    5,
+			Bottom: 5,
+		}),
+
+		// add a handler that reacts to clicking the button
+		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
+			fmt.Println(game.standardTextInput.GetText())
+			startConnection(false, &game)
+		}),
+
+		// Indicate that this button should not be submitted when enter or space are pressed
+		widget.ButtonOpts.DisableDefaultKeys(),
+	)
+
+	// add the button as a child of the container
+	rootContainer.AddChild(game.joinButton)
+
+	// construct a standard textinput widget
+	game.standardTextInput = widget.NewTextInput(
+		widget.TextInputOpts.WidgetOpts(
+			//Set the layout information to center the textbox in the parent
+			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
+				HorizontalPosition: widget.AnchorLayoutPositionCenter,
+				VerticalPosition:   widget.AnchorLayoutPositionCenter,
+			}),
+			widget.WidgetOpts.MinSize(150, 30),
+		),
+
+		//Set the Idle and Disabled background image for the text input
+		//If the NineSlice image has a minimum size, the widget will use that or
+		// widget.WidgetOpts.MinSize; whichever is greater
+		widget.TextInputOpts.Image(&widget.TextInputImage{
+			Idle:     image.NewNineSliceColor(color.NRGBA{R: 100, G: 100, B: 100, A: 255}),
+			Disabled: image.NewNineSliceColor(color.NRGBA{R: 100, G: 100, B: 100, A: 255}),
+		}),
+
+		//Set the font face and size for the widget
+		widget.TextInputOpts.Face(face),
+
+		//Set the colors for the text and caret
+		widget.TextInputOpts.Color(&widget.TextInputColor{
+			Idle:          color.NRGBA{254, 255, 255, 255},
+			Disabled:      color.NRGBA{R: 200, G: 200, B: 200, A: 255},
+			Caret:         color.NRGBA{254, 255, 255, 255},
+			DisabledCaret: color.NRGBA{R: 200, G: 200, B: 200, A: 255},
+		}),
+
+		//Set how much padding there is between the edge of the input and the text
+		widget.TextInputOpts.Padding(widget.NewInsetsSimple(5)),
+
+		//Set the font and width of the caret
+		widget.TextInputOpts.CaretOpts(
+			widget.CaretOpts.Size(face, 2),
+		),
+
+		//This text is displayed if the input is empty
+		widget.TextInputOpts.Placeholder("Lobby ID"),
+
+		//This is called when the user hits the "Enter" key.
+		//There are other options that can configure this behavior
+		widget.TextInputOpts.SubmitHandler(func(args *widget.TextInputChangedEventArgs) {
+			fmt.Println("Text Submitted: ", args.InputText)
+		}),
+
+		//This is called whenever there is a change to the text
+		widget.TextInputOpts.ChangedHandler(func(args *widget.TextInputChangedEventArgs) {
+			fmt.Println("Text Changed: ", args.InputText)
+		}),
+	)
+
+	rootContainer.AddChild(game.standardTextInput)
+
 	// triggers the game loop to actually start up
 	// if we run into an error, log what it is
-	if err := ebiten.RunGame(&Game{}); err != nil {
+	if err := ebiten.RunGame(&game); err != nil {
 		log.Fatal(err)
 	}
+
+	// close the connection when the game ends
+	closeConnection()
 }
 
 type Packet struct {
@@ -396,44 +614,29 @@ func WriteLoop(d io.Writer) {
 	}
 }
 
-// Read from stdin until we get a newline
-func readUntilNewline() (in string) {
-	var err error
+func loadButtonImage() (*widget.ButtonImage, error) {
+	idle := image.NewNineSliceColor(color.NRGBA{R: 170, G: 170, B: 180, A: 255})
 
-	r := bufio.NewReader(os.Stdin)
-	for {
-		in, err = r.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			panic(err)
-		}
+	hover := image.NewNineSliceColor(color.NRGBA{R: 130, G: 130, B: 150, A: 255})
 
-		if in = strings.TrimSpace(in); len(in) > 0 {
-			break
-		}
-	}
+	pressed := image.NewNineSliceColor(color.NRGBA{R: 100, G: 100, B: 120, A: 255})
 
-	fmt.Println("")
-	return
+	return &widget.ButtonImage{
+		Idle:    idle,
+		Hover:   hover,
+		Pressed: pressed,
+	}, nil
 }
 
-// JSON encode + base64 a SessionDescription
-func encode(obj *webrtc.SessionDescription) string {
-	b, err := json.Marshal(obj)
+func loadFont(size float64) (text.Face, error) {
+	s, err := text.NewGoTextFaceSource(bytes.NewReader(goregular.TTF))
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+		return nil, err
 	}
 
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-// Decode a base64 and unmarshal JSON into a SessionDescription
-func decode(in string, obj *webrtc.SessionDescription) {
-	b, err := base64.StdEncoding.DecodeString(in)
-	if err != nil {
-		panic(err)
-	}
-
-	if err = json.Unmarshal(b, obj); err != nil {
-		panic(err)
-	}
+	return &text.GoTextFace{
+		Source: s,
+		Size:   size,
+	}, nil
 }
