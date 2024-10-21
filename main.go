@@ -40,6 +40,14 @@ var (
 	remote_pos_y = 40.0
 )
 
+var lobby_id string
+var isHost = false
+
+// client to the HTTP signaling server
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
 func init() {
 	var err error
 	img, _, err = ebitenutil.NewImageFromFile("gopher.png")
@@ -121,7 +129,7 @@ type PlayerData struct {
 	Id int
 }
 
-func startConnection(isHost bool, game *Game) {
+func startConnection(game *Game) {
 	// Since this behavior diverges from the WebRTC API it has to be
 	// enabled using a settings engine. Mixing both detached and the
 	// OnMessage DataChannel API is not supported.
@@ -179,16 +187,12 @@ func startConnection(isHost bool, game *Game) {
 		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
 	})
 
-	// client to the HTTP signaling server
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
 
 	// the one that gives the answer is the host
 	if isHost {
 
 		// Host creates lobby
-		lobby_resp, err := client.Get("http://localhost:3000/lobby/host")
+		lobby_resp, err := httpClient.Get("http://localhost:3000/lobby/host")
 		if err != nil {
 			panic(err)
 		}
@@ -196,7 +200,7 @@ func startConnection(isHost bool, game *Game) {
 		if err != nil {
 			panic(err)
 		}
-		lobby_id := string(bodyBytes)
+		lobby_id = string(bodyBytes)
 		fmt.Printf("Lobby ID: %s\n", lobby_id)
 		game.standardTextInput.SetText(lobby_id)
 
@@ -236,7 +240,7 @@ func startConnection(isHost bool, game *Game) {
 					// hardcode that there is only one other player and they have player_id 1
 					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=1"
 					fmt.Println(getUrl)
-					offer_resp, err := client.Get(getUrl)
+					offer_resp, err := httpClient.Get(getUrl)
 					if err != nil {
 						panic(err)
 					}
@@ -282,7 +286,7 @@ func startConnection(isHost bool, game *Game) {
 					}
 					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=1"
 					fmt.Println(postUrl)
-					client.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
+					httpClient.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
 					// if we have successfully set the remote description, we can break out of the loop
 					ticker.Stop()
 					return
@@ -290,8 +294,8 @@ func startConnection(isHost bool, game *Game) {
 			}
 		}()
 	} else {
-		lobby_id := game.standardTextInput.GetText()
-		response, err := client.Get("http://localhost:3000/lobby/join?id=" + lobby_id)
+		lobby_id = game.standardTextInput.GetText()
+		response, err := httpClient.Get("http://localhost:3000/lobby/join?id=" + lobby_id)
 		if err != nil {
 			panic(err)
 		}
@@ -345,7 +349,7 @@ func startConnection(isHost bool, game *Game) {
 				}
 				postUrl := "http://localhost:3000/offer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
 				fmt.Println(postUrl)
-				client.Post(postUrl, "application/json", bytes.NewBuffer(offerJson))
+				httpClient.Post(postUrl, "application/json", bytes.NewBuffer(offerJson))
 			}
 		})
 
@@ -360,7 +364,7 @@ func startConnection(isHost bool, game *Game) {
 					fmt.Println("Polling for answer")
 					url := "http://localhost:3000/answer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
 					fmt.Println(url)
-					answer_resp, err := client.Get(url)
+					answer_resp, err := httpClient.Get(url)
 					if err != nil {
 						panic(err)
 					}
@@ -451,7 +455,8 @@ func main() {
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
 			fmt.Println(game.standardTextInput.GetText())
-			startConnection(true, &game)
+			isHost = true
+			startConnection(&game)
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
@@ -493,7 +498,8 @@ func main() {
 		// add a handler that reacts to clicking the button
 		widget.ButtonOpts.ClickedHandler(func(args *widget.ButtonClickedEventArgs) {
 			fmt.Println(game.standardTextInput.GetText())
-			startConnection(false, &game)
+			isHost = false
+			startConnection(&game)
 		}),
 
 		// Indicate that this button should not be submitted when enter or space are pressed
