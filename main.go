@@ -43,6 +43,9 @@ var (
 var lobby_id string
 var isHost = false
 
+// players registered by host
+var registered_players = make(map[int]struct{})
+
 // client to the HTTP signaling server
 var httpClient = &http.Client{
 	Timeout: 10 * time.Second,
@@ -313,7 +316,11 @@ func startConnection(game *Game) {
 					fmt.Printf("Player IDs: %v\n", player_ids)
 					// poll for all of the unregistered players
 					for _, player_id := range player_ids {
-						go pollForPlayerOffer(player_id)
+						// only start goroutine if player_id hasn't been registered yet
+						if _, ok := registered_players[player_id]; !ok {
+							registered_players[player_id] = struct{}{}
+							go pollForPlayerOffer(player_id)
+						}
 					}
 				}
 			}
