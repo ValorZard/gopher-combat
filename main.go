@@ -43,6 +43,9 @@ var (
 var lobby_id string
 var isHost = false
 
+// players registered by host
+var registered_players = make(map[int]struct{})
+
 // client to the HTTP signaling server
 var httpClient = &http.Client{
 	Timeout: 10 * time.Second,
@@ -187,7 +190,6 @@ func startConnection(game *Game) {
 		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
 	})
 
-
 	// the one that gives the answer is the host
 	if isHost {
 
@@ -226,19 +228,16 @@ func startConnection(game *Game) {
 			})
 		})
 
-		// Wait for the offer to be pasted
-		offer := webrtc.SessionDescription{}
-		ticker := time.NewTicker(1 * time.Second)
-
-		// poll for offer from signaling server
-		go func() {
+		// poll for offer from signaling server for player
+		pollForPlayerOffer := func(player_id int) {
+			ticker := time.NewTicker(1 * time.Second)
 			for {
 				select {
 				case t := <-ticker.C:
 					fmt.Println("Tick at", t)
-					fmt.Println("Polling for offer")
+					fmt.Printf("Polling for offer for %d\n", player_id)
 					// hardcode that there is only one other player and they have player_id 1
-					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=1"
+					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
 					fmt.Println(getUrl)
 					offer_resp, err := httpClient.Get(getUrl)
 					if err != nil {
@@ -250,6 +249,7 @@ func startConnection(game *Game) {
 					body := new(bytes.Buffer)
 					body.ReadFrom(offer_resp.Body)
 					fmt.Printf("Got offer %v\n", body.String())
+					offer := webrtc.SessionDescription{}
 					err = json.NewDecoder(body).Decode(&offer)
 					if err != nil {
 						panic(err)
@@ -278,8 +278,27 @@ func startConnection(game *Game) {
 					// we do this because we only can exchange one signaling message
 					// in a production application you should exchange ICE Candidates via OnICECandidate
 					<-gatherComplete
+					// send answer we generated to the signaling server
+					answerJson, err := json.Marshal(peerConnection.LocalDescription())
+					if err != nil {
+						panic(err)
+					}
+					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
+					fmt.Println(postUrl)
+					httpClient.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
+					// if we have successfully set the remote description, we can break out of the loop
+					ticker.Stop()
+					return
+				}
+			}
+		}
 
-					// TODO: remove this
+		go func() {
+			ticker := time.NewTicker(1 * time.Second)
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
 					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
 					fmt.Println(idUrl)
 					id_resp, err := httpClient.Get(idUrl)
@@ -295,17 +314,14 @@ func startConnection(game *Game) {
 						panic(err)
 					}
 					fmt.Printf("Player IDs: %v\n", player_ids)
-					// send answer we generated to the signaling server
-					answerJson, err := json.Marshal(peerConnection.LocalDescription())
-					if err != nil {
-						panic(err)
+					// poll for all of the unregistered players
+					for _, player_id := range player_ids {
+						// only start goroutine if player_id hasn't been registered yet
+						if _, ok := registered_players[player_id]; !ok {
+							registered_players[player_id] = struct{}{}
+							go pollForPlayerOffer(player_id)
+						}
 					}
-					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=1"
-					fmt.Println(postUrl)
-					httpClient.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
-					// if we have successfully set the remote description, we can break out of the loop
-					ticker.Stop()
-					return
 				}
 			}
 		}()
