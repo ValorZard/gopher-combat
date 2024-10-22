@@ -43,6 +43,13 @@ var (
 var lobby_id string
 var isHost = false
 
+var signalingIP = "127.0.0.1"
+var port = 3000
+
+func getSignalingURL() string {
+	return "http://" + signalingIP + ":" + strconv.Itoa(port)
+}
+
 // players registered by host
 var registered_players = make(map[int]struct{})
 
@@ -194,7 +201,7 @@ func startConnection(game *Game) {
 	if isHost {
 
 		// Host creates lobby
-		lobby_resp, err := httpClient.Get("http://localhost:3000/lobby/host")
+		lobby_resp, err := httpClient.Get(getSignalingURL() + "/lobby/host")
 		if err != nil {
 			panic(err)
 		}
@@ -237,7 +244,7 @@ func startConnection(game *Game) {
 					fmt.Println("Tick at", t)
 					fmt.Printf("Polling for offer for %d\n", player_id)
 					// hardcode that there is only one other player and they have player_id 1
-					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
+					getUrl := getSignalingURL() + "/offer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
 					fmt.Println(getUrl)
 					offer_resp, err := httpClient.Get(getUrl)
 					if err != nil {
@@ -283,7 +290,7 @@ func startConnection(game *Game) {
 					if err != nil {
 						panic(err)
 					}
-					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
+					postUrl := getSignalingURL() + "/answer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
 					fmt.Println(postUrl)
 					httpClient.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
 					// if we have successfully set the remote description, we can break out of the loop
@@ -299,7 +306,7 @@ func startConnection(game *Game) {
 				select {
 				case t := <-ticker.C:
 					fmt.Println("Tick at", t)
-					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
+					idUrl := getSignalingURL() + "/lobby/unregisteredPlayers?id=" + lobby_id
 					fmt.Println(idUrl)
 					id_resp, err := httpClient.Get(idUrl)
 					if err != nil {
@@ -327,7 +334,7 @@ func startConnection(game *Game) {
 		}()
 	} else {
 		lobby_id = game.standardTextInput.GetText()
-		response, err := httpClient.Get("http://localhost:3000/lobby/join?id=" + lobby_id)
+		response, err := httpClient.Get(getSignalingURL() + "/lobby/join?id=" + lobby_id)
 		if err != nil {
 			panic(err)
 		}
@@ -379,7 +386,7 @@ func startConnection(game *Game) {
 				if err != nil {
 					panic(err)
 				}
-				postUrl := "http://localhost:3000/offer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
+				postUrl := getSignalingURL() + "/offer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
 				fmt.Println(postUrl)
 				httpClient.Post(postUrl, "application/json", bytes.NewBuffer(offerJson))
 			}
@@ -394,7 +401,7 @@ func startConnection(game *Game) {
 				case t := <-ticker.C:
 					fmt.Println("Tick at", t)
 					fmt.Println("Polling for answer")
-					url := "http://localhost:3000/answer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
+					url := getSignalingURL() + "/answer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_data.Id)
 					fmt.Println(url)
 					answer_resp, err := httpClient.Get(url)
 					if err != nil {
@@ -431,7 +438,7 @@ func closeConnection() {
 	// TODO: this doesn't work, fix this
 	if isHost {
 		// delete lobby if host
-		url := "http://localhost:3000/lobby/delete"
+		url := getSignalingURL() + "/lobby/delete"
 		fmt.Println(url)
 		httpClient.Get(url)
 	}
