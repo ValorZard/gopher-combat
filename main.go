@@ -279,6 +279,22 @@ func startConnection(game *Game) {
 					// in a production application you should exchange ICE Candidates via OnICECandidate
 					<-gatherComplete
 
+					// TODO: remove this
+					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
+					fmt.Println(idUrl)
+					id_resp, err := httpClient.Get(idUrl)
+					if err != nil {
+						panic(err)
+					}
+					if id_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					var player_ids []int
+					err = json.NewDecoder(id_resp.Body).Decode(&player_ids)
+					if err != nil {
+						panic(err)
+					}
+					fmt.Printf("Player IDs: %v\n", player_ids)
 					// send answer we generated to the signaling server
 					answerJson, err := json.Marshal(peerConnection.LocalDescription())
 					if err != nil {
@@ -395,6 +411,13 @@ func startConnection(game *Game) {
 func closeConnection() {
 	if cErr := peerConnection.Close(); cErr != nil {
 		fmt.Printf("cannot close peerConnection: %v\n", cErr)
+	}
+	// TODO: this doesn't work, fix this
+	if isHost {
+		// delete lobby if host
+		url := "http://localhost:3000/lobby/delete"
+		fmt.Println(url)
+		httpClient.Get(url)
 	}
 }
 
