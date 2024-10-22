@@ -227,11 +227,9 @@ func startConnection(game *Game) {
 		})
 
 		// Wait for the offer to be pasted
-		offer := webrtc.SessionDescription{}
-		ticker := time.NewTicker(1 * time.Second)
-
 		// poll for offer from signaling server
 		go func() {
+			ticker := time.NewTicker(1 * time.Second)
 			for {
 				select {
 				case t := <-ticker.C:
@@ -250,6 +248,7 @@ func startConnection(game *Game) {
 					body := new(bytes.Buffer)
 					body.ReadFrom(offer_resp.Body)
 					fmt.Printf("Got offer %v\n", body.String())
+					offer := webrtc.SessionDescription{}
 					err = json.NewDecoder(body).Decode(&offer)
 					if err != nil {
 						panic(err)
