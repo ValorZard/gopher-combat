@@ -225,42 +225,16 @@ func startConnection(game *Game) {
 			})
 		})
 
-		go func() {
+		// poll for offer from signaling server for player
+		pollForPlayerOffer := func(player_id int) {
 			ticker := time.NewTicker(1 * time.Second)
 			for {
 				select {
 				case t := <-ticker.C:
 					fmt.Println("Tick at", t)
-					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
-					fmt.Println(idUrl)
-					id_resp, err := httpClient.Get(idUrl)
-					if err != nil {
-						panic(err)
-					}
-					if id_resp.StatusCode != http.StatusOK {
-						continue
-					}
-					var player_ids []int
-					err = json.NewDecoder(id_resp.Body).Decode(&player_ids)
-					if err != nil {
-						panic(err)
-					}
-					fmt.Printf("Player IDs: %v\n", player_ids)
-				}
-			}
-		}()
-
-		// Wait for the offer to be pasted
-		// poll for offer from signaling server
-		go func() {
-			ticker := time.NewTicker(1 * time.Second)
-			for {
-				select {
-				case t := <-ticker.C:
-					fmt.Println("Tick at", t)
-					fmt.Println("Polling for offer")
+					fmt.Printf("Polling for offer for %d\n", player_id)
 					// hardcode that there is only one other player and they have player_id 1
-					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=1"
+					getUrl := "http://localhost:3000/offer/get?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
 					fmt.Println(getUrl)
 					offer_resp, err := httpClient.Get(getUrl)
 					if err != nil {
@@ -306,12 +280,41 @@ func startConnection(game *Game) {
 					if err != nil {
 						panic(err)
 					}
-					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=1"
+					postUrl := "http://localhost:3000/answer/post?lobby_id=" + lobby_id + "&player_id=" + strconv.Itoa(player_id)
 					fmt.Println(postUrl)
 					httpClient.Post(postUrl, "application/json", bytes.NewBuffer(answerJson))
 					// if we have successfully set the remote description, we can break out of the loop
 					ticker.Stop()
 					return
+				}
+			}
+		}
+
+		go func() {
+			ticker := time.NewTicker(1 * time.Second)
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
+					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
+					fmt.Println(idUrl)
+					id_resp, err := httpClient.Get(idUrl)
+					if err != nil {
+						panic(err)
+					}
+					if id_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					var player_ids []int
+					err = json.NewDecoder(id_resp.Body).Decode(&player_ids)
+					if err != nil {
+						panic(err)
+					}
+					fmt.Printf("Player IDs: %v\n", player_ids)
+					// poll for all of the unregistered players
+					for _, player_id := range player_ids {
+						go pollForPlayerOffer(player_id)
+					}
 				}
 			}
 		}()
