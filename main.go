@@ -187,7 +187,6 @@ func startConnection(game *Game) {
 		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
 	})
 
-
 	// the one that gives the answer is the host
 	if isHost {
 
@@ -225,6 +224,31 @@ func startConnection(game *Game) {
 				go WriteLoop(raw)
 			})
 		})
+
+		go func() {
+			ticker := time.NewTicker(1 * time.Second)
+			for {
+				select {
+				case t := <-ticker.C:
+					fmt.Println("Tick at", t)
+					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
+					fmt.Println(idUrl)
+					id_resp, err := httpClient.Get(idUrl)
+					if err != nil {
+						panic(err)
+					}
+					if id_resp.StatusCode != http.StatusOK {
+						continue
+					}
+					var player_ids []int
+					err = json.NewDecoder(id_resp.Body).Decode(&player_ids)
+					if err != nil {
+						panic(err)
+					}
+					fmt.Printf("Player IDs: %v\n", player_ids)
+				}
+			}
+		}()
 
 		// Wait for the offer to be pasted
 		// poll for offer from signaling server
@@ -277,23 +301,6 @@ func startConnection(game *Game) {
 					// we do this because we only can exchange one signaling message
 					// in a production application you should exchange ICE Candidates via OnICECandidate
 					<-gatherComplete
-
-					// TODO: remove this
-					idUrl := "http://localhost:3000//lobby/unregisteredPlayers?id=" + lobby_id
-					fmt.Println(idUrl)
-					id_resp, err := httpClient.Get(idUrl)
-					if err != nil {
-						panic(err)
-					}
-					if id_resp.StatusCode != http.StatusOK {
-						continue
-					}
-					var player_ids []int
-					err = json.NewDecoder(id_resp.Body).Decode(&player_ids)
-					if err != nil {
-						panic(err)
-					}
-					fmt.Printf("Player IDs: %v\n", player_ids)
 					// send answer we generated to the signaling server
 					answerJson, err := json.Marshal(peerConnection.LocalDescription())
 					if err != nil {
