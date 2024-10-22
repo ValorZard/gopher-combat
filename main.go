@@ -105,7 +105,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.ui.Draw(screen)
 
 	// prints something on the screen
-	ebitenutil.DebugPrint(screen, "Hello, World!")
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %f", ebiten.ActualFPS()))
 
 	// draw image
 	op := &ebiten.DrawImageOptions{}
