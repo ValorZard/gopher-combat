@@ -11,3 +11,7 @@ you can run this by going either
 
 or
 ``.\build_wasm.ps1``
+
+Click "Host Game" to get the lobby id, and then share that with the other clients to get connected
+
+Right now this only supports two clients in the same lobby
