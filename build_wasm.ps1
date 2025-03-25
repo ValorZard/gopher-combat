@@ -6,7 +6,7 @@ Remove-Item Env:GOARCH
 
 $goroot = go env GOROOT
 # have to copy the wasm_exec.js file to the current directory
-# not really sure where it should be, but this is where it is on my computer
+# the location of this file changed in go 1.24
 cp $goroot\lib\wasm\wasm_exec.js .
 
 # serve the files
