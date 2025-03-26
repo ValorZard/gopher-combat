@@ -333,6 +333,8 @@ func startConnection(game *Game) {
 			}
 		}()
 	} else {
+		// the following is for the client joining the lobby
+		// get lobby id from text input
 		lobby_id = game.standardTextInput.GetText()
 		response, err := httpClient.Get(getSignalingURL() + "/lobby/join?id=" + lobby_id)
 		if err != nil {
@@ -562,7 +564,7 @@ func main() {
 
 		// the container will use an anchor layout to layout its single child widget
 		widget.ContainerOpts.Layout(widget.NewAnchorLayout()),
-		
+
 		widget.ContainerOpts.WidgetOpts(
 			//Set the layout information to center the container in the parent
 			widget.WidgetOpts.LayoutData(widget.AnchorLayoutData{
@@ -722,7 +724,7 @@ func ReadLoop(d io.Reader) {
 
 // WriteLoop shows how to write to the datachannel directly
 func WriteLoop(d io.Writer) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(time.Millisecond * 20)
 	defer ticker.Stop()
 	for range ticker.C {
 		packet := &Packet{pos_x, pos_y}

@@ -15,6 +15,8 @@ you can run this by going either
 or
 ``.\build_wasm.ps1``
 
+(see [this tutorial for more information on how to build for WebAssembly](https://ebitengine.org/en/documents/webassembly.html))
+
 Click "Host Game" to get the lobby id, and then share that with the other clients to get connected
 
 Right now this only supports two clients in the same lobby
